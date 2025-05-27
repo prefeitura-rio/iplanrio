@@ -8,7 +8,6 @@ dependencies = [
     "basedosdados==2.0.0b23",
     "croniter>=6.0.0",
     "cx-oracle>=8.3.0",
-    "infisicalsdk>=1.0.8",
     "prefect>=3.4.3",
     "psycopg2-binary>=2.9.10",
     "pymysql>=1.1.1",
