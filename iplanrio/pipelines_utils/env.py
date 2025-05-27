@@ -37,6 +37,13 @@ def getenv_or_action(
     return value
 
 
+def get_database_username_and_password_from_secret_env(path: str = None):
+    return {
+        "DB_USERNAME": getenv_or_action(f"{path}.DB_USERNAME"),
+        "DB_PASSWORD": getenv_or_action(f"{path}.DB_PASSWORD"),
+    }
+
+
 def get_bd_credentials_from_env(
     mode: str = None, scopes: List[str] = None
 ) -> service_account.Credentials:
