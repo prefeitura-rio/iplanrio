@@ -1,6 +1,10 @@
 # -*- coding: utf-8 -*-
+import base64
+import json
 from os import getenv
-from typing import Union
+from typing import List, Union
+
+from google.oauth2 import service_account
 
 from iplanrio.pipelines_utils.logging import log
 
@@ -31,3 +35,24 @@ def getenv_or_action(
         elif action == "warn":
             log.warning(f"Environment variable '{key}' not found.")
     return value
+
+
+def get_bd_credentials_from_env(
+    mode: str = None, scopes: List[str] = None
+) -> service_account.Credentials:
+    """
+    Gets credentials from env vars
+    """
+
+    if mode not in ["prod", "staging"]:
+        raise ValueError("Mode must be 'prod' or 'staging'")
+    env: str = getenv(f"BASEDOSDADOS_CREDENTIALS_{mode.upper()}", "")
+    if env == "":
+        raise ValueError(f"BASEDOSDADOS_CREDENTIALS_{mode.upper()} env var not set!")
+    info: dict = json.loads(base64.b64decode(env))
+    cred: service_account.Credentials = (
+        service_account.Credentials.from_service_account_info(info)
+    )
+    if scopes:
+        cred = cred.with_scopes(scopes)
+    return cred

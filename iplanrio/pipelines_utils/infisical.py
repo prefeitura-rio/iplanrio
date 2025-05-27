@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 import base64
 from os import environ
-from typing import Literal, Tuple
+from typing import List, Literal, Tuple
 
 from infisical import InfisicalClient
 
@@ -99,6 +99,32 @@ def get_secret(
         path=path,
     )
     return {secret_name: secret.secret_value}
+
+
+def get_secrets_from_list(secrets_list: List[dict]) -> dict:
+    """
+    Retrieves secrets based on a list of secret specifications and stores them in a dictionary.
+
+    Each item in the secrets_list is expected to be a dictionary with at least two keys:
+    'secret_name' and 'secret_path', which are used to identify and locate the secret.
+
+    Args:
+        secrets_list (List[dict]): A list of dictionaries, where each dictionary contains
+        the 'secret_name' and 'secret_path' used to retrieve the secret.
+
+    Returns:
+        dict: A dictionary of secrets, with each key being the 'secret_name' and the value
+        being the retrieved secret.
+    """
+
+    secret_dict = {}
+    for _secret in secrets_list:
+        secret = get_secret(
+            secret_name=_secret["secret_name"], path=_secret["secret_path"]
+        )
+        secret_dict[_secret["secret_name"]] = secret[_secret["secret_name"]]
+
+    return secret_dict
 
 
 def get_database_username_and_password_from_secret(
