@@ -3,23 +3,23 @@ import base64
 from os import environ
 from typing import List, Literal, Tuple
 
-from infisical import InfisicalClient
+from infisical_sdk import InfisicalSDKClient
 
 from iplanrio.pipelines_utils.env import getenv_or_action
 from iplanrio.pipelines_utils.logging import log
 
 
-def get_infisical_client() -> InfisicalClient:
+def get_infisical_client() -> InfisicalSDKClient:
     """
     Returns an Infisical client using the default settings from environment variables.
 
     Returns:
-        InfisicalClient: The Infisical client.
+        InfisicalSDKClient: The Infisical client.
     """
     token = getenv_or_action("INFISICAL_TOKEN", action="raise")
     site_url = getenv_or_action("INFISICAL_ADDRESS", action="raise")
     log(f"INFISICAL_ADDRESS: {site_url}")
-    return InfisicalClient(
+    return InfisicalSDKClient(
         token=token,
         site_url=site_url,
     )
@@ -30,7 +30,7 @@ def get_secret_folder(
     secret_name: str = None,
     type: Literal["shared", "personal"] = "personal",
     environment: str = None,
-    client: InfisicalClient = None,
+    client: InfisicalSDKClient = None,
 ) -> dict:
     """
     Fetches secrets from Infisical. If passing only `secret_path` and
@@ -68,7 +68,7 @@ def get_secret(
     environment: str = None,
     type: Literal["shared", "personal"] = "personal",
     path: str = "/",
-    client: InfisicalClient = None,
+    client: InfisicalSDKClient = None,
 ) -> dict:
     """
     Returns the secret with the given name from Infisical.
@@ -79,7 +79,7 @@ def get_secret(
         type (Literal["shared", "personal"], optional): The type of secret to retrieve. Defaults to
             "personal".
         path (str, optional): The path to retrieve the secret from. Defaults to "/".
-        client (InfisicalClient, optional): The Infisical client to use. Defaults to None.
+        client (InfisicalSDKClient, optional): The Infisical client to use. Defaults to None.
 
     Returns:
         str: The value of the secret.
@@ -129,7 +129,7 @@ def get_secrets_from_list(secrets_list: List[dict]) -> dict:
 
 def get_database_username_and_password_from_secret(
     secret_path: str,
-    client: InfisicalClient = None,
+    client: InfisicalSDKClient = None,
 ) -> Tuple[str, str]:
     """
     Returns a username and password from a secret in Vault.
@@ -149,7 +149,7 @@ def inject_env(
     environment: str = None,
     type: Literal["shared", "personal"] = "personal",
     path: str = "/",
-    client: InfisicalClient = None,
+    client: InfisicalSDKClient = None,
 ) -> None:
     """
     Loads the secret with the given name from Infisical into an environment variable.
@@ -160,7 +160,7 @@ def inject_env(
         type (Literal["shared", "personal"], optional): The type of secret to retrieve.
             Defaults to "personal".
         path (str, optional): The path to retrieve the secret from. Defaults to "/".
-        client (InfisicalClient, optional): The Infisical client to use. Defaults to None.
+        client (InfisicalSDKClient, optional): The Infisical client to use. Defaults to None.
     """
     if client is None:
         client = get_infisical_client()
