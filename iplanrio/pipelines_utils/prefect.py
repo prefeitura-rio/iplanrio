@@ -74,7 +74,7 @@ def generate_dump_db_schedules(  # pylint: disable=too-many-arguments,too-many-l
 
         for key, value in other_parameters.items():
             if key not in parameters:
-                parameters[key] = value
+                parameter_defaults[key] = value
 
         clocks.append(
             Interval(
