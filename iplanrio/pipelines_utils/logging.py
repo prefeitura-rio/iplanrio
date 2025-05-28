@@ -17,7 +17,7 @@ def log(msg: Any, level: str = "info") -> None:
         "critical": logging.CRITICAL,
     }
 
-    blank_spaces = 8 * " "
+    blank_spaces = 4 * " "
     msg = blank_spaces + "----\n" + str(msg)
     msg = "\n".join([blank_spaces + line for line in msg.split("\n")]) + "\n\n"
 
