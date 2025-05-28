@@ -5,7 +5,7 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
-    "basedosdados==2.0.0b23",
+    "basedosdados[upload]==2.0.0b23",
     "croniter>=6.0.0",
     "cx-oracle>=8.3.0",
     "prefect>=3.4.3",
