@@ -26,6 +26,18 @@ def generate_dump_db_schedules(  # pylint: disable=too-many-arguments,too-many-l
     """
     Generates multiple schedules for database dumping.
     """
+    other_parameters = {
+        "retry_dump_upload_attempts": 1,
+        "batch_data_type": "csv",
+        "log_number_of_batches": 100,
+        "partition_date_format": None,
+        "partition_columns": None,
+        "lower_bound_date": None,
+        "break_query_frequency": None,
+        "break_query_start": None,
+        "break_query_end": None,
+    }
+
     db_port = str(db_port)
     clocks = []
     for count, parameters in enumerate(table_parameters):
@@ -59,6 +71,11 @@ def generate_dump_db_schedules(  # pylint: disable=too-many-arguments,too-many-l
             if "start_date" in parameters
             else start_date + timedelta(minutes=runs_interval_minutes * count)
         )
+
+        for key, value in other_parameters.items():
+            if key not in parameters:
+                parameters[key] = value
+
         clocks.append(
             Interval(
                 new_interval,
