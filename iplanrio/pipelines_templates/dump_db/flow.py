@@ -14,7 +14,7 @@ from iplanrio.pipelines_utils.constants import NOT_SET
 
 
 @flow(log_prints=True)
-def rj_smfp__dump_db_ergon(
+def dump_db(
     db_database: str = "db_database",
     db_host: str = "db_host",
     db_port: str = "db_port",
