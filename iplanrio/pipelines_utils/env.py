@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 import base64
 import json
-from os import getenv
+from os import environ, getenv
 from typing import List, Union
 
 from google.oauth2 import service_account
@@ -64,3 +64,19 @@ def get_bd_credentials_from_env(
     if scopes:
         cred = cred.with_scopes(scopes)
     return cred
+
+
+def inject_bd_credentials(environment: str = "prod"):
+    service_account_name = f"BASEDOSDADOS_CREDENTIALS_{environment.upper()}"
+    service_account_b64 = getenv_or_action(service_account_name)
+    service_account = base64.b64decode(service_account_b64)
+    with open("/tmp/credentials.json", "wb") as credentials_file:
+        credentials_file.write(service_account)
+    environ["GOOGLE_APPLICATION_CREDENTIALS"] = "/tmp/credentials.json"
+    log(f"INJECTED: {service_account_name}")
+
+
+def get_database_username_and_password_from_secret(infisical_secret_path: str):
+    return get_database_username_and_password_from_secret_env(
+        secret_path=infisical_secret_path
+    )

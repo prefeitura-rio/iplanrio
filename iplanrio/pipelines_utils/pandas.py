@@ -12,14 +12,14 @@ import pandas as pd
 from iplanrio.pipelines_utils.logging import log
 
 
-def batch_to_dataframe(batch: Tuple[Tuple], columns: List[str]) -> pd.DataFrame:
+def batch_to_dataframe(batch: List[List], columns: List[str]) -> pd.DataFrame:
     """
     Converts a batch of rows to a dataframe.
     """
-    return pd.DataFrame(batch, columns=columns)
+    return pd.DataFrame(data=batch, columns=columns)
 
 
-def build_query_new_columns(table_columns: List[str]) -> List[str]:
+def build_query_new_columns(table_columns: List[str]) -> str:
     """ "
     Creates the query without accents.
     """
