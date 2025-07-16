@@ -4,7 +4,7 @@ import time
 from datetime import datetime, timedelta
 from typing import List, Union
 
-from prefect import get_client
+from prefect.client.orchestration import get_client
 from prefect.client.schemas.filters import DeploymentFilter, FlowFilter, FlowRunFilter
 from prefect.client.schemas.sorting import FlowRunSort
 from prefect.schedules import Interval
