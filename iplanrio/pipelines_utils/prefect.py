@@ -231,6 +231,84 @@ def delete_all_eligible_flow_runs(
         time.sleep(1)
 
 
+def create_deployment(
+    schedules_parameters: list,
+    deployment_name: str,
+    entrypoint: str,
+    version: str,
+    base_interval_seconds: int,
+    base_anchor_date_str: str,
+    runs_interval_minutes: int,
+    timezone: str,
+    work_pool_name: str,
+    work_queue_name: str,
+    job_image: str,
+    job_command: str,
+    slug_field: str = None,
+):
+    """
+    Generates a full Prefect deployment YAML.
+
+        Args:
+            schedules_parameters (list): A list of dictionaries, each defining a table to dump.
+            deployment_name (str): The name for the Prefect deployment.
+            entrypoint (str): The entrypoint for the flow (e.g., 'path/to/flow.py:flow_name').
+            base_interval_seconds (int): The base interval for schedules.
+            base_anchor_date_str (str): The anchor date for the first schedule.
+            runs_interval_minutes (int): The number of minutes to wait between starting each schedule.
+            timezone (str): The IANA timezone for all schedules.
+            work_pool_name (str): The name of the work pool.
+            work_queue_name (str): The name of the work queue.
+            job_image (str): The Docker image for the job.
+            job_command (str): The command to execute the flow run.
+
+        Returns:
+            dict: A dictionary representing the complete Prefect deployment YAML.
+    """
+    base_anchor_date = datetime.fromisoformat(base_anchor_date_str)
+    schedules = []
+
+    for i, table_params in enumerate(schedules_parameters):
+        # Calculate the staggered anchor date for this schedule
+        anchor_date = base_anchor_date + timedelta(minutes=runs_interval_minutes * i)
+        flow_run_parameters = {}
+        for key, value in table_params.items():
+            flow_run_parameters[key] = value
+            # Create the final schedule object for the YAML
+
+        schedule_config = {
+            "interval": base_interval_seconds,
+            "anchor_date": anchor_date.isoformat(),
+            "timezone": timezone,
+        }
+
+        if slug_field:
+            schedule_config["slug"] = flow_run_parameters[slug_field]
+        schedule_config["parameters"] = flow_run_parameters
+
+        schedules.append(schedule_config)
+    # Assemble the final deployment structure
+    deployment_config = {
+        "deployments": [
+            {
+                "name": deployment_name,
+                "version": version,
+                "entrypoint": entrypoint,
+                "work_pool": {
+                    "name": work_pool_name,
+                    "work_queue_name": work_queue_name,
+                    "job_variables": {
+                        "image": job_image,
+                        "command": job_command,
+                    },
+                },
+                "schedules": schedules,
+            }
+        ]
+    }
+    return deployment_config
+
+
 def create_dump_db_deployment(
     deployment_name: str,
     version: str,
