@@ -38,7 +38,7 @@ def getenv_or_action(
 
 
 def get_database_username_and_password_from_secret_env(secret_path: str = None) -> dict:
-    secret_path = secret_path.upper().replace("-", "_")
+    secret_path = secret_path.upper().replace("-", "_").replace("/", "")
     return {
         "DB_USERNAME": getenv_or_action(f"{secret_path}__DB_USERNAME"),
         "DB_PASSWORD": getenv_or_action(f"{secret_path}__DB_PASSWORD"),
