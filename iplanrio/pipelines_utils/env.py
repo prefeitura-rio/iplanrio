@@ -13,7 +13,7 @@ def getenv_or_action(
     key: str, default: str = None, action: str = "raise"
 ) -> Union[str, None]:
     """
-    Gets an environment variable or executes an action.
+    Gets an environment variable or executes an action
 
     Args:
         key (str): The environment variable key.
