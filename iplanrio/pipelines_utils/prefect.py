@@ -11,6 +11,7 @@ from prefect.schedules import Interval
 
 from iplanrio.pipelines_utils.constants import NOT_SET
 from iplanrio.pipelines_utils.io import query_to_line
+import yaml
 
 
 def generate_dump_db_schedules(  # pylint: disable=too-many-arguments,too-many-locals
@@ -231,19 +232,12 @@ def delete_all_eligible_flow_runs(
         time.sleep(1)
 
 
-def create_deployment(
+def create_schedules(
     schedules_parameters: list,
-    deployment_name: str,
-    entrypoint: str,
-    version: str,
     base_interval_seconds: int,
     base_anchor_date_str: str,
     runs_interval_minutes: int,
     timezone: str,
-    work_pool_name: str,
-    work_queue_name: str,
-    job_image: str,
-    job_command: str,
     slug_field: str = None,
 ):
     """
@@ -288,31 +282,17 @@ def create_deployment(
 
         schedules.append(schedule_config)
     # Assemble the final deployment structure
-    deployment_config = {
-        "deployments": [
-            {
-                "name": deployment_name,
-                "version": version,
-                "entrypoint": entrypoint,
-                "work_pool": {
-                    "name": work_pool_name,
-                    "work_queue_name": work_queue_name,
-                    "job_variables": {
-                        "image": job_image,
-                        "command": job_command,
-                    },
-                },
-                "schedules": schedules,
-            }
-        ]
-    }
-    return deployment_config
+    return yaml.dump(
+        {
+            "schedules": schedules,
+        },
+        sort_keys=False,
+        indent=2,
+        width=120,
+    )
 
 
-def create_dump_db_deployment(
-    deployment_name: str,
-    version: str,
-    entrypoint: str,
+def create_dump_db_schedules(
     table_parameters_list: list,
     base_interval_seconds: int,
     base_anchor_date_str: str,
@@ -324,10 +304,6 @@ def create_dump_db_deployment(
     db_port: int,
     dataset_id: str,
     infisical_secret_path: str,
-    work_pool_name: str,
-    work_queue_name: str,
-    job_image: str,
-    job_command: str,
     default_biglake_table: bool = True,
     default_batch_size: int = 50000,
 ):
@@ -400,22 +376,11 @@ def create_dump_db_deployment(
         schedules.append(schedule_config)
 
     # Assemble the final deployment structure
-    deployment_config = {
-        "deployments": [
-            {
-                "name": deployment_name,
-                "version": version,
-                "entrypoint": entrypoint,
-                "work_pool": {
-                    "name": work_pool_name,
-                    "work_queue_name": work_queue_name,
-                    "job_variables": {
-                        "image": job_image,
-                        "command": job_command,
-                    },
-                },
-                "schedules": schedules,
-            }
-        ]
-    }
-    return deployment_config
+    return yaml.dump(
+        {
+            "schedules": schedules,
+        },
+        sort_keys=False,
+        indent=2,
+        width=120,
+    )
