@@ -131,37 +131,40 @@ async def delete_flow_run_batch(
 
     async with get_client() as client:
         print(f"  Buscando até {batch_size} execuções de fluxo para deleção...")
-        flow_runs = await client.read_flow_runs(
-            flow_filter=FlowFilter(name={"any_": [flow_name]}) if flow_name else None,
-            deployment_filter=(
-                DeploymentFilter(name={"any_": [deployment_name]})
-                if deployment_name
-                else None
-            ),
-            flow_run_filter=FlowRunFilter(state={"name": {"any_": states}}),
-            sort=FlowRunSort.END_TIME_DESC,
-            limit=batch_size,
-        )
-        if not flow_runs:
-            print(
-                "  Nenhuma execução de fluxo encontrada neste batch que corresponda aos critérios."
-            )
-            return 0
+        response = await client.hello()
+        print(response.json())
 
-        print(f"  Encontradas {len(flow_runs)} execuções para deletar neste batch.")
-        deleted_count_in_batch = 0
-        for i, run in enumerate(flow_runs):
-            print(
-                f"    Deletando run {i+1}/{len(flow_runs)} (ID: {run.id}, Estado: {run.state_name})..."
-            )
-            try:
-                await client.delete_flow_run(flow_run_id=run.id)
-                deleted_count_in_batch += 1
-            except Exception as e:
-                print(f"    Erro ao deletar a execução de fluxo {run.id}: {e}")
-                # Decide if you want to continue or break on error
+        # flow_runs = await client.read_flow_runs(
+        #     flow_filter=FlowFilter(name={"any_": [flow_name]}) if flow_name else None,
+        #     deployment_filter=(
+        #         DeploymentFilter(name={"any_": [deployment_name]})
+        #         if deployment_name
+        #         else None
+        #     ),
+        #     flow_run_filter=FlowRunFilter(state={"name": {"any_": states}}),
+        #     sort=FlowRunSort.END_TIME_DESC,
+        #     limit=batch_size,
+        # )
+        # if not flow_runs:
+        #     print(
+        #         "  Nenhuma execução de fluxo encontrada neste batch que corresponda aos critérios."
+        #     )
+        #     return 0
 
-        return deleted_count_in_batch
+        # print(f"  Encontradas {len(flow_runs)} execuções para deletar neste batch.")
+        # deleted_count_in_batch = 0
+        # for i, run in enumerate(flow_runs):
+        #     print(
+        #         f"    Deletando run {i+1}/{len(flow_runs)} (ID: {run.id}, Estado: {run.state_name})..."
+        #     )
+        #     try:
+        #         await client.delete_flow_run(flow_run_id=run.id)
+        #         deleted_count_in_batch += 1
+        #     except Exception as e:
+        #         print(f"    Erro ao deletar a execução de fluxo {run.id}: {e}")
+        #         # Decide if you want to continue or break on error
+
+        # return deleted_count_in_batch
 
 
 def delete_all_eligible_flow_runs(
