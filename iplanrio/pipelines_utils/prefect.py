@@ -132,8 +132,10 @@ async def delete_flow_run_batch(
         states = []
 
     states = [state.capitalize() for state in states]
-
-    total_estimated_batches = int(number_of_runs / API_FETCH_LIMIT)
+    batches_int = int(number_of_runs / API_FETCH_LIMIT)
+    total_estimated_batches = (
+        batches_int if number_of_runs % API_FETCH_LIMIT == 0 else batches_int
+    )
 
     total_deleted_count = 0
     batch_number = 0
@@ -143,6 +145,7 @@ async def delete_flow_run_batch(
     print(
         f"Estimativa: {total_estimated_batches} lotes de no máximo {API_FETCH_LIMIT} execuções cada."
     )
+    total_time = 0
     async with get_client() as client:
         while total_deleted_count < number_of_runs:
             batch_number += (
@@ -195,9 +198,16 @@ async def delete_flow_run_batch(
             deleted_in_this_batch = sum(1 for r in results if r is True)
             failures_in_this_batch = total_in_batch - deleted_in_this_batch
             total_deleted_count += deleted_in_this_batch
-            end_time = time.time()
+            batch_time = time.time() - start_time
+            total_time += batch_time
+            estimated_time_to_finish = str(
+                timedelta(
+                    seconds=(total_time / batch_number)
+                    * (total_estimated_batches - batch_number)
+                )
+            )[:7]
             print(
-                f"  Deleted: {total_deleted_count}/{number_of_runs} - {round(100 * total_deleted_count/number_of_runs, 2)}% - {round(end_time - start_time, 2)} seconds"
+                f"  Deleted: {total_deleted_count}/{number_of_runs} - {round(100 * total_deleted_count/number_of_runs, 2)}% | {round(batch_time, 2)}s / {estimated_time_to_finish}"
             )
             if total_in_batch < runs_to_fetch:
                 print(
