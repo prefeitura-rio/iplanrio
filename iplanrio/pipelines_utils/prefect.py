@@ -24,15 +24,14 @@ async def rename_current_flow_run(new_name: str):
     """
 
     # Pega o contexto da execução atual para obter o ID
-    # flow_run_id = get_run_context().flow_run.id
-    flow_run_id = "01981e58-4266-75f1-8fab-6fbefa41f2d0"
+    flow_run_id = get_run_context().flow_run.id
 
-    log.info(f"Obtido o ID da execução do fluxo: {flow_run_id}")
+    log(f"Obtido o ID da execução do fluxo: {flow_run_id}")
     # Usa o cliente assíncrono do Prefect para interagir com a API
     async with get_client() as client:
         await client.update_flow_run(flow_run_id=flow_run_id, name=new_name)
 
-    log.info("Nome da execução do fluxo atualizado com sucesso!")
+    log(f"Nome da execução do fluxo atualizado para {new_name}!")
 
 
 def generate_dump_db_schedules(  # pylint: disable=too-many-arguments,too-many-locals
