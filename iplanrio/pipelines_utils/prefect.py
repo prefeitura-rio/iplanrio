@@ -5,13 +5,34 @@ from datetime import datetime, timedelta
 from typing import List, Union
 
 import yaml
+from prefect import task
 from prefect.client.orchestration import get_client
 from prefect.client.schemas.filters import DeploymentFilter, FlowFilter, FlowRunFilter
 from prefect.client.schemas.sorting import FlowRunSort
+from prefect.context import get_run_context
 from prefect.schedules import Interval
 
 from iplanrio.pipelines_utils.constants import NOT_SET
 from iplanrio.pipelines_utils.io import query_to_line
+from iplanrio.pipelines_utils.logging import log
+
+
+@task
+async def rename_current_flow_run(new_name: str):
+    """
+    Atualiza o nome da execução do fluxo atual.
+    """
+
+    # Pega o contexto da execução atual para obter o ID
+    # flow_run_id = get_run_context().flow_run.id
+    flow_run_id = "01981e58-4266-75f1-8fab-6fbefa41f2d0"
+
+    log.info(f"Obtido o ID da execução do fluxo: {flow_run_id}")
+    # Usa o cliente assíncrono do Prefect para interagir com a API
+    async with get_client() as client:
+        await client.update_flow_run(flow_run_id=flow_run_id, name=new_name)
+
+    log.info("Nome da execução do fluxo atualizado com sucesso!")
 
 
 def generate_dump_db_schedules(  # pylint: disable=too-many-arguments,too-many-locals
