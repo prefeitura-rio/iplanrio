@@ -17,19 +17,23 @@ from iplanrio.pipelines_utils.io import query_to_line
 from iplanrio.pipelines_utils.logging import log
 
 
-@task
-async def rename_current_flow_run_task(new_name: str):
+# @task
+def rename_current_flow_run_task(new_name: str):
     """
     Atualiza o nome da execução do fluxo atual.
     """
 
     # Pega o contexto da execução atual para obter o ID
     flow_run_id = get_run_context().flow_run.id
-
     log(f"Obtido o ID da execução do fluxo: {flow_run_id}")
+
     # Usa o cliente assíncrono do Prefect para interagir com a API
-    async with get_client() as client:
-        await client.update_flow_run(flow_run_id=flow_run_id, name=new_name)
+    # 1. Define uma função async interna para fazer o trabalho com o cliente
+    async def _update_run_name():
+        async with get_client() as client:
+            await client.update_flow_run(flow_run_id=flow_run_id, name=new_name)
+
+    asyncio.run(_update_run_name())
 
     log(f"Nome da execução do fluxo atualizado para {new_name}!")
 
