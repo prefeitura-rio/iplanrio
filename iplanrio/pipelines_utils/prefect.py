@@ -24,7 +24,8 @@ def rename_current_flow_run_task(new_name: str):
     """
 
     # Pega o contexto da execução atual para obter o ID
-    flow_run_id = get_run_context().flow_run.id
+    context = get_run_context()
+    flow_run_id = context.task_run.flow_run_id
     log(f"Obtido o ID da execução do fluxo: {flow_run_id}")
 
     # Usa o cliente assíncrono do Prefect para interagir com a API
