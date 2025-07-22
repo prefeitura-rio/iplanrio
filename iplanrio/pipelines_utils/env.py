@@ -5,6 +5,7 @@ from os import environ, getenv
 from typing import List, Union
 
 from google.oauth2 import service_account
+from prefect import task
 
 from iplanrio.pipelines_utils.logging import log
 
@@ -74,6 +75,11 @@ def inject_bd_credentials(environment: str = "prod"):
         credentials_file.write(service_account)
     environ["GOOGLE_APPLICATION_CREDENTIALS"] = "/tmp/credentials.json"
     log(f"INJECTED: {service_account_name}")
+
+
+@task
+def inject_bd_credentials_task(environment: str = "prod"):
+    inject_bd_credentials(environment=environment)
 
 
 def get_database_username_and_password_from_secret(infisical_secret_path: str):

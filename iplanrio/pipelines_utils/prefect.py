@@ -18,7 +18,7 @@ from iplanrio.pipelines_utils.logging import log
 
 
 @task
-async def rename_current_flow_run(new_name: str):
+async def rename_current_flow_run_task(new_name: str):
     """
     Atualiza o nome da execução do fluxo atual.
     """

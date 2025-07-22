@@ -11,13 +11,7 @@ from iplanrio.pipelines_templates.dump_db.utils import (
 from iplanrio.pipelines_utils.constants import NOT_SET
 from iplanrio.pipelines_utils.env import (
     get_database_username_and_password_from_secret_env,
-    inject_bd_credentials,
 )
-
-
-@task
-def inject_bd_credentials_task(environment: str = "prod"):
-    inject_bd_credentials(environment=environment)
 
 
 @task
