@@ -18,7 +18,7 @@ def delete_blobs_list(bucket_name: str, blobs: List[Blob], mode: str = "prod") -
     bucket.delete_blobs(blobs)
 
 
-def get_gcs_client(mode: str = None) -> storage.Client:
+def get_gcs_client(mode: str = "staging") -> storage.Client:
     """
     Get a GCS client with the credentials from the environment.
     Mode needs to be "prod" or "staging"
@@ -35,7 +35,7 @@ def get_gcs_client(mode: str = None) -> storage.Client:
 
 
 def list_blobs_with_prefix(
-    bucket_name: str, prefix: str, mode: str = None
+    bucket_name: str, prefix: str, mode: str = "staging"
 ) -> List[Blob]:
     """
     Lists all the blobs in the bucket that begin with the prefix.

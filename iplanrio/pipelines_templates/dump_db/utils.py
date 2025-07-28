@@ -297,6 +297,7 @@ def dump_upload_batch(
                                 blobs = list_blobs_with_prefix(
                                     bucket_name=st.bucket_name,
                                     prefix=f"staging/{dataset_id}/{table_id}/{partition}",
+                                    mode="staging",
                                 )
                                 blobs_to_delete.extend(blobs)
                             cleared_partitions.add(partition)
