@@ -427,13 +427,13 @@ def dump_upload_batch_mappable_task(
     """
     bd_version = bd.__version__
     log(msg=f"Usando basedosdados@{bd_version}")
-    queries = [query["query"] for query in queries]
+    queries_strings = [query["query"] for query in queries]
     start_dates = [query["start_date"] for query in queries]
     end_dates = [query["end_date"] for query in queries]
 
-    if len(queries) <= 1:
+    if len(queries_strings) <= 1:
         log(msg="Executando em modo SEQUENCIAL.")
-        if not queries:
+        if not queries_strings:
             log(msg="Nenhuma query fornecida. Finalizando.")
             return
 
@@ -447,7 +447,7 @@ def dump_upload_batch_mappable_task(
             password=password,
             database=database,
             charset=charset,
-            query=queries[0],
+            query=queries_strings[0],
             batch_size=batch_size,
             dataset_id=dataset_id,
             table_id=table_id,
@@ -465,7 +465,7 @@ def dump_upload_batch_mappable_task(
         log(msg="----------------------------------------------------")
 
     else:
-        log(msg=f"Executando em modo PARALELO para {len(queries)} queries.")
+        log(msg=f"Executando em modo PARALELO para {len(queries_strings)} queries.")
         if dump_mode == "overwrite":
             log(
                 msg="AVISO: 'overwrite' é inseguro para execuções paralelas. A tabela será limpa uma vez, e todos os workers farão append.",
@@ -486,7 +486,7 @@ def dump_upload_batch_mappable_task(
                 password=password,
                 database=database,
                 charset=charset,
-                query=queries[0],
+                query=queries_strings[0],
                 batch_size=1,
                 dataset_id=dataset_id,
                 table_id=table_id,
@@ -505,7 +505,7 @@ def dump_upload_batch_mappable_task(
             log(msg="Tabela de destino pronta para receber appends em paralelo.")
 
         # Construção explícita das listas de parâmetros para o .map()
-        num_queries = len(queries)
+        num_queries = len(queries_strings)
         futures = _mappable_worker_task.map(
             database_type=[database_type] * num_queries,
             hostname=[hostname] * num_queries,
@@ -514,7 +514,7 @@ def dump_upload_batch_mappable_task(
             password=[password] * num_queries,
             database=[database] * num_queries,
             charset=[charset] * num_queries,
-            query=queries,
+            query=queries_strings,
             start_dates=start_dates,
             end_dates=end_dates,
             batch_size=[batch_size] * num_queries,
@@ -889,14 +889,14 @@ def dump_upload_batch(
     wait_seconds = 30
     total_idx = 0
     total_batchs_len = 0
-    queries = [query["query"] for query in queries]
-    for n_query, query in enumerate(queries):
+    queries_strings = [query["query"] for query in queries]
+    for n_query, query in enumerate(queries_strings):
         attempts = retry_dump_upload_attempts
         while attempts >= 0:
             try:
                 log(f"Attempt: { retry_dump_upload_attempts - attempts}")
                 log(
-                    f"query {n_query+1} of {len(queries)} |{ round(100 * (n_query+1) / len(queries), 2)}"
+                    f"query {n_query+1} of {len(queries_strings)} |{ round(100 * (n_query+1) / len(queries_strings), 2)}"
                 )
 
                 db_object = database_get_db(
@@ -1261,5 +1261,5 @@ def dump_upload_batch(
         total_batchs_len += batchs_len
 
     log(
-        msg=f"Successfully dumped {len(queries)} queries, {total_idx} batches, total of {total_batchs_len} rows"  # noqa
+        msg=f"Successfully dumped {len(queries_strings)} queries, {total_idx} batches, total of {total_batchs_len} rows"  # noqa
     )
