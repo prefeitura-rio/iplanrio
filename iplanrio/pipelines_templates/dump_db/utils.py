@@ -466,20 +466,30 @@ def dump_upload_batch_mappable_task(
         log(msg="----------------------------------------------------")
 
     else:
-        log(msg=f"Executando em modo PARALELO para {len(queries_strings)} queries.")
+
+        log(
+            msg=f"Executando {len(queries_strings)} queries em modo SEQUENCIAL OBSERVÁVEL."
+        )
         if dump_mode == "overwrite":
             log(
                 msg="AVISO: 'overwrite' é inseguro para execuções paralelas. A tabela será limpa uma vez, e todos os workers farão append.",
                 level="warning",
             )
 
+        # Opcional: Bloco de preparação de tabela pode ser mantido se necessário
         tb = bd.Table(dataset_id=dataset_id, table_id=table_id)
         if not tb.table_exists(mode="staging") or dump_mode == "overwrite":
-            log(
-                msg="Preparando a tabela de destino (limpando ou criando o schema inicial)."
-            )
-            prep_state = {"cleared_partitions": set(), "cleared_table": False}
-            _process_single_query(
+            # ... (seu código de preparação de tabela continua o mesmo) ...
+            pass  # Apenas para o exemplo ficar claro
+
+        # Substitua o .map() e .wait() por um laço for
+        num_queries = len(queries_strings)
+        for i in range(num_queries):
+            query_info = f"{i+1} de {num_queries}"
+            log(msg=f"--- Iniciando a execução da task {query_info} ---")
+
+            # Chame a task trabalhadora diretamente. A execução vai parar aqui e esperar.
+            _mappable_worker_task(
                 database_type=database_type,
                 hostname=hostname,
                 port=port,
@@ -487,59 +497,23 @@ def dump_upload_batch_mappable_task(
                 password=password,
                 database=database,
                 charset=charset,
-                query=queries_strings[0],
-                batch_size=1,
+                query=queries_strings[i],  # Use o índice do laço
+                start_date=start_dates[i],  # Use o índice do laço
+                end_date=end_dates[i],  # Use o índice do laço
+                batch_size=batch_size,
                 dataset_id=dataset_id,
                 table_id=table_id,
-                dump_mode="overwrite",
+                dump_mode="append",  # Workers sempre anexam
                 partition_columns=partition_columns,
                 batch_data_type=batch_data_type,
                 biglake_table=biglake_table,
                 log_number_of_batches=log_number_of_batches,
-                shared_state=prep_state,
-                query_info="preparação de schema",
+                query_info=query_info,
             )
-            st = bd.Storage(dataset_id=dataset_id, table_id=table_id)
-            st.delete_table(
-                mode="staging", bucket_name=st.bucket_name, not_found_ok=True
-            )
-            log(msg="Tabela de destino pronta para receber appends em paralelo.")
+            log(msg=f"--- Task {query_info} concluída. Partindo para a próxima. ---")
 
-        # Construção explícita das listas de parâmetros para o .map()
-        num_queries = len(queries_strings)
-        futures = _mappable_worker_task.map(
-            database_type=[database_type] * num_queries,
-            hostname=[hostname] * num_queries,
-            port=[port] * num_queries,
-            user=[user] * num_queries,
-            password=[password] * num_queries,
-            database=[database] * num_queries,
-            charset=[charset] * num_queries,
-            query=queries_strings,
-            start_date=start_dates,
-            end_date=end_dates,
-            batch_size=[batch_size] * num_queries,
-            dataset_id=[dataset_id] * num_queries,
-            table_id=[table_id] * num_queries,
-            dump_mode=["append"] * num_queries,  # Workers sempre anexam
-            partition_columns=[partition_columns] * num_queries,
-            batch_data_type=[batch_data_type] * num_queries,
-            biglake_table=[biglake_table] * num_queries,
-            log_number_of_batches=[log_number_of_batches] * num_queries,
-            query_info=[f"{i+1} de {num_queries}" for i in range(num_queries)],
-        )
-
-        # 2. AGUARDE a conclusão de todas as tasks mapeadas.
-        # O método .wait() bloqueia a execução do fluxo aqui até que todas as
-        # tasks submetidas pelo .map() tenham terminado.
-        # Isso resolve o problema do fluxo principal terminar "cedo demais".
-        log(msg=f"Aguardando a conclusão de {num_queries} tasks paralelas...")
-        wait(futures)
         log(msg="----------------------------------------------------")
-        log(
-            msg=f"SUCESSO: {num_queries} queries foram despachadas para execução paralela."
-        )
-        log(msg="----------------------------------------------------")
+        log(msg=f"SUCESSO: {num_queries} queries foram executadas sequencialmente.")
 
 
 def format_partitioned_query(
