@@ -8,6 +8,7 @@ from uuid import uuid4
 
 import basedosdados as bd
 from prefect import task
+from prefect.futures import wait
 
 from iplanrio.pipelines_utils.bd import get_storage_blobs
 from iplanrio.pipelines_utils.constants import NOT_SET
@@ -533,8 +534,7 @@ def dump_upload_batch_mappable_task(
         # tasks submetidas pelo .map() tenham terminado.
         # Isso resolve o problema do fluxo principal terminar "cedo demais".
         log(msg=f"Aguardando a conclusão de {num_queries} tasks paralelas...")
-        [future.wait() for future in futures]
-
+        wait(futures)
         log(msg="----------------------------------------------------")
         log(
             msg=f"SUCESSO: {num_queries} queries foram despachadas para execução paralela."
