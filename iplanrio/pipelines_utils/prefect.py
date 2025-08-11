@@ -39,6 +39,28 @@ def rename_current_flow_run_task(new_name: str):
     log(f"Nome da execução do fluxo atualizado para {new_name}!")
 
 
+@task
+def rename_current_task_run_task(new_name: str):
+    """
+    Atualiza o nome da execução do fluxo atual.
+    """
+
+    # Pega o contexto da execução atual para obter o ID
+    context = get_run_context()
+    task_run_id = context.task_run.id
+    log(f"Obtido o ID da execução da task: {task_run_id}")
+
+    # Usa o cliente assíncrono do Prefect para interagir com a API
+    # 1. Define uma função async interna para fazer o trabalho com o cliente
+    async def _update_run_name():
+        async with get_client() as client:
+            await client.update_task_run(task_run_id=task_run_id, name=new_name)
+
+    asyncio.run(_update_run_name())
+
+    log(f"Nome da execução do fluxo atualizado para {new_name}!")
+
+
 def generate_dump_db_schedules(  # pylint: disable=too-many-arguments,too-many-locals
     interval: timedelta,
     start_date: datetime,
