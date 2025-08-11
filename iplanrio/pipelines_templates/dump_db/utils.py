@@ -126,6 +126,11 @@ def database_execute(
     database.execute_query(query)
 
 
+@task(
+    name="_process_single_query",
+    retries=3,
+    retry_delay_seconds=30,
+)
 def _process_single_query(
     query: str,
     db_conn_details: dict,
@@ -136,8 +141,6 @@ def _process_single_query(
     Processa uma única query, incluindo retentativas e o loop de batches.
     Esta função contém a lógica principal extraída da sua task original.
     """
-    wait_seconds = 30
-    attempts = batch_params["retry_dump_upload_attempts"]
 
     # Desempacota o estado compartilhado
     cleared_partitions = shared_state["cleared_partitions"]
@@ -145,139 +148,122 @@ def _process_single_query(
 
     prepath = Path(f"data/{uuid4()}/")
 
-    while attempts >= 0:
-        try:
-            db_object = database_get_db(**db_conn_details)
-            database_execute(database=db_object, query=query)
+    db_object = database_get_db(**db_conn_details)
+    database_execute(database=db_object, query=query)
 
-            columns = db_object.get_columns()
+    columns = db_object.get_columns()
 
-            # Desempacota os parâmetros de batch
-            batch_size = batch_params["batch_size"]
-            dataset_id = batch_params["dataset_id"]
-            table_id = batch_params["table_id"]
-            dump_mode = batch_params["dump_mode"]
-            partition_columns = batch_params["partition_columns"]
-            batch_data_type = batch_params["batch_data_type"]
-            biglake_table = batch_params["biglake_table"]
-            log_number_of_batches = batch_params["log_number_of_batches"]
+    # Desempacota os parâmetros de batch
+    batch_size = batch_params["batch_size"]
+    dataset_id = batch_params["dataset_id"]
+    table_id = batch_params["table_id"]
+    dump_mode = batch_params["dump_mode"]
+    partition_columns = batch_params["partition_columns"]
+    batch_data_type = batch_params["batch_data_type"]
+    biglake_table = batch_params["biglake_table"]
+    log_number_of_batches = batch_params["log_number_of_batches"]
 
-            partition_column = partition_columns[0] if partition_columns else None
+    partition_column = partition_columns[0] if partition_columns else None
 
-            batch = db_object.fetch_batch(batch_size)
-            idx = 0
-            batchs_len = 0
-            while len(batch) > 0:
-                prepath.mkdir(parents=True, exist_ok=True)
-                log_mod(
-                    f"Dumping batch {idx+1} with size {len(batch)}",
-                    idx,
-                    log_number_of_batches,
-                )
-                batchs_len += len(batch)
+    batch = db_object.fetch_batch(batch_size)
+    idx = 0
+    batchs_len = 0
+    while len(batch) > 0:
+        prepath.mkdir(parents=True, exist_ok=True)
+        log_mod(
+            msg=f"Dumping batch {idx+1} with size {len(batch)}",
+            index=idx,
+            mod=log_number_of_batches,
+        )
+        batchs_len += len(batch)
 
-                # --- USA SUAS FUNÇÕES DE PROCESSAMENTO ---
-                dataframe = batch_to_dataframe(batch=batch, columns=columns)
-                old_columns = dataframe.columns.tolist()
-                dataframe.columns = remove_columns_accents(dataframe)
-                new_columns_dict = dict(zip(old_columns, dataframe.columns.tolist()))
-                dataframe = clean_dataframe(dataframe)
+        # --- USA SUAS FUNÇÕES DE PROCESSAMENTO ---
+        dataframe = batch_to_dataframe(batch=batch, columns=columns)
+        old_columns = dataframe.columns.tolist()
+        dataframe.columns = remove_columns_accents(dataframe)
+        new_columns_dict = dict(zip(old_columns, dataframe.columns.tolist()))
+        dataframe = clean_dataframe(dataframe)
 
-                saved_files = []
-                if partition_column:
-                    dataframe, date_partition_columns = parse_date_columns(
-                        dataframe, new_columns_dict[partition_column]
-                    )
-                    partitions = date_partition_columns + [
-                        new_columns_dict[col] for col in partition_columns[1:]
-                    ]
-                    saved_files = to_partitions(
-                        data=dataframe,
-                        partition_columns=partitions,
-                        savepath=prepath,
-                        data_type=batch_data_type,
-                        suffix=f"{datetime.now().strftime('%Y%m%d-%H%M%S')}",
-                    )
-                else:
-                    file_map = {
-                        "csv": dataframe_to_csv,
-                        "parquet": dataframe_to_parquet,
-                    }
-                    fname = prepath / f"{uuid4()}.{batch_data_type}"
-                    file_map[batch_data_type](dataframe, fname)
-                    saved_files = [fname]
-
-                # --- LÓGICA DE UPLOAD (IDÊNTICA À ORIGINAL) ---
-                tb = bd.Table(dataset_id=dataset_id, table_id=table_id)
-                st = bd.Storage(dataset_id=dataset_id, table_id=table_id)
-                dataset_is_public = tb.client["bigquery_prod"].project == "datario"
-
-                # Limpeza de partições no GCS
-                if partition_column:
-                    current_partitions = {
-                        str(f.parent.relative_to(prepath)) for f in saved_files
-                    }
-                    blobs_to_delete = [
-                        blob
-                        for part in current_partitions
-                        if part not in cleared_partitions
-                        for blob in list_blobs_with_prefix(
-                            st.bucket_name,
-                            f"staging/{dataset_id}/{table_id}/{part}",
-                            "staging",
-                        )
-                    ]
-                    cleared_partitions.update(current_partitions)
-                    if blobs_to_delete:
-                        delete_blobs_list(st.bucket_name, blobs_to_delete)
-
-                # Gerenciamento da tabela (Append/Overwrite)
-                if dump_mode == "overwrite" and not cleared_table:
-                    st.delete_table(
-                        mode="staging", bucket_name=st.bucket_name, not_found_ok=True
-                    )
-                    tb.delete(mode="staging")
-                    cleared_table = True
-
-                if not tb.table_exists(mode="staging"):
-                    header_path = dump_header_to_file(data_path=saved_files[0])
-                    tb.create(
-                        path=header_path,
-                        if_storage_data_exists="replace",
-                        if_table_exists="replace",
-                        biglake_table=biglake_table,
-                        dataset_is_public=dataset_is_public,
-                    )
-                    st.delete_table(
-                        mode="staging", bucket_name=st.bucket_name, not_found_ok=True
-                    )
-                    cleared_table = True
-
-                # Upload e limpeza local
-                tb.append(filepath=prepath, if_exists="replace")
-                shutil.rmtree(prepath)
-
-                # Próximo batch
-                batch = db_object.fetch_batch(batch_size)
-                idx += 1
-
-            # Sucesso, sai do loop de retentativas
-            return cleared_partitions, cleared_table, idx, batchs_len
-
-        except Exception as e:
-            if prepath.exists():
-                shutil.rmtree(prepath)
-            if attempts == 0:
-                log(f"Final attempt failed for query: {query}", level="error")
-                raise e
-            log(
-                f"Query failed. Retrying in {wait_seconds}s. Attempts left: {attempts - 1}",
-                level="error",
+        saved_files = []
+        if partition_column:
+            dataframe, date_partition_columns = parse_date_columns(
+                dataframe, new_columns_dict[partition_column]
             )
-            attempts -= 1
-            time.sleep(wait_seconds)
+            partitions = date_partition_columns + [
+                new_columns_dict[col] for col in partition_columns[1:]
+            ]
+            saved_files = to_partitions(
+                data=dataframe,
+                partition_columns=partitions,
+                savepath=prepath,
+                data_type=batch_data_type,
+                suffix=f"{datetime.now().strftime('%Y%m%d-%H%M%S')}",
+            )
+        else:
+            file_map = {
+                "csv": dataframe_to_csv,
+                "parquet": dataframe_to_parquet,
+            }
+            fname = prepath / f"{uuid4()}.{batch_data_type}"
+            file_map[batch_data_type](dataframe, fname)
+            saved_files = [fname]
 
-    return cleared_partitions, cleared_table, 0, 0  # Se todas as tentativas falharem
+        # --- LÓGICA DE UPLOAD (IDÊNTICA À ORIGINAL) ---
+        tb = bd.Table(dataset_id=dataset_id, table_id=table_id)
+        st = bd.Storage(dataset_id=dataset_id, table_id=table_id)
+        dataset_is_public = tb.client["bigquery_prod"].project == "datario"
+
+        # Limpeza de partições no GCS
+        if partition_column:
+            current_partitions = {
+                str(f.parent.relative_to(prepath)) for f in saved_files
+            }
+            blobs_to_delete = [
+                blob
+                for part in current_partitions
+                if part not in cleared_partitions
+                for blob in list_blobs_with_prefix(
+                    st.bucket_name,
+                    f"staging/{dataset_id}/{table_id}/{part}",
+                    "staging",
+                )
+            ]
+            cleared_partitions.update(current_partitions)
+            if blobs_to_delete:
+                delete_blobs_list(st.bucket_name, blobs_to_delete)
+
+        # Gerenciamento da tabela (Append/Overwrite)
+        if dump_mode == "overwrite" and not cleared_table:
+            st.delete_table(
+                mode="staging", bucket_name=st.bucket_name, not_found_ok=True
+            )
+            tb.delete(mode="staging")
+            cleared_table = True
+
+        if not tb.table_exists(mode="staging"):
+            header_path = dump_header_to_file(data_path=saved_files[0])
+            tb.create(
+                path=header_path,
+                if_storage_data_exists="replace",
+                if_table_exists="replace",
+                biglake_table=biglake_table,
+                dataset_is_public=dataset_is_public,
+            )
+            st.delete_table(
+                mode="staging", bucket_name=st.bucket_name, not_found_ok=True
+            )
+            cleared_table = True
+
+        # Upload e limpeza local
+        tb.append(filepath=prepath, if_exists="replace")
+        shutil.rmtree(prepath)
+
+        # Próximo batch
+        batch = db_object.fetch_batch(batch_size)
+        idx += 1
+
+    # Sucesso, sai do loop de retentativas
+    return cleared_partitions, cleared_table, idx, batchs_len
 
 
 @task(
