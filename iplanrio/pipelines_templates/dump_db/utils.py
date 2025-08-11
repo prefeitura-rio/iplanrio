@@ -3,10 +3,11 @@ import shutil
 import time
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Set, Tuple
 from uuid import uuid4
 
 import basedosdados as bd
+from prefect import task
 
 from iplanrio.pipelines_utils.bd import get_storage_blobs
 from iplanrio.pipelines_utils.constants import NOT_SET
@@ -123,6 +124,273 @@ def database_execute(
     query = remove_tabs_from_query(query)
     log(f"Executing query line: {query}")
     database.execute_query(query)
+
+
+def _process_single_query(
+    query: str,
+    db_conn_details: dict,
+    batch_params: dict,
+    shared_state: dict,
+) -> Tuple[Set[str], bool, int, int]:
+    """
+    Processa uma única query, incluindo retentativas e o loop de batches.
+    Esta função contém a lógica principal extraída da sua task original.
+    """
+    wait_seconds = 30
+    attempts = batch_params["retry_dump_upload_attempts"]
+
+    # Desempacota o estado compartilhado
+    cleared_partitions = shared_state["cleared_partitions"]
+    cleared_table = shared_state["cleared_table"]
+
+    prepath = Path(f"data/{uuid4()}/")
+
+    while attempts >= 0:
+        try:
+            db_object = database_get_db(**db_conn_details)
+            database_execute(database=db_object, query=query)
+
+            columns = db_object.get_columns()
+
+            # Desempacota os parâmetros de batch
+            batch_size = batch_params["batch_size"]
+            dataset_id = batch_params["dataset_id"]
+            table_id = batch_params["table_id"]
+            dump_mode = batch_params["dump_mode"]
+            partition_columns = batch_params["partition_columns"]
+            batch_data_type = batch_params["batch_data_type"]
+            biglake_table = batch_params["biglake_table"]
+            log_number_of_batches = batch_params["log_number_of_batches"]
+
+            partition_column = partition_columns[0] if partition_columns else None
+
+            batch = db_object.fetch_batch(batch_size)
+            idx = 0
+            batchs_len = 0
+            while len(batch) > 0:
+                prepath.mkdir(parents=True, exist_ok=True)
+                log_mod(
+                    f"Dumping batch {idx+1} with size {len(batch)}",
+                    idx,
+                    log_number_of_batches,
+                )
+                batchs_len += len(batch)
+
+                # --- USA SUAS FUNÇÕES DE PROCESSAMENTO ---
+                dataframe = batch_to_dataframe(batch=batch, columns=columns)
+                old_columns = dataframe.columns.tolist()
+                dataframe.columns = remove_columns_accents(dataframe)
+                new_columns_dict = dict(zip(old_columns, dataframe.columns.tolist()))
+                dataframe = clean_dataframe(dataframe)
+
+                saved_files = []
+                if partition_column:
+                    dataframe, date_partition_columns = parse_date_columns(
+                        dataframe, new_columns_dict[partition_column]
+                    )
+                    partitions = date_partition_columns + [
+                        new_columns_dict[col] for col in partition_columns[1:]
+                    ]
+                    saved_files = to_partitions(
+                        data=dataframe,
+                        partition_columns=partitions,
+                        savepath=prepath,
+                        data_type=batch_data_type,
+                        suffix=f"{datetime.now().strftime('%Y%m%d-%H%M%S')}",
+                    )
+                else:
+                    file_map = {
+                        "csv": dataframe_to_csv,
+                        "parquet": dataframe_to_parquet,
+                    }
+                    fname = prepath / f"{uuid4()}.{batch_data_type}"
+                    file_map[batch_data_type](dataframe, fname)
+                    saved_files = [fname]
+
+                # --- LÓGICA DE UPLOAD (IDÊNTICA À ORIGINAL) ---
+                tb = bd.Table(dataset_id=dataset_id, table_id=table_id)
+                st = bd.Storage(dataset_id=dataset_id, table_id=table_id)
+                dataset_is_public = tb.client["bigquery_prod"].project == "datario"
+
+                # Limpeza de partições no GCS
+                if partition_column:
+                    current_partitions = {
+                        str(f.parent.relative_to(prepath)) for f in saved_files
+                    }
+                    blobs_to_delete = [
+                        blob
+                        for part in current_partitions
+                        if part not in cleared_partitions
+                        for blob in list_blobs_with_prefix(
+                            st.bucket_name,
+                            f"staging/{dataset_id}/{table_id}/{part}",
+                            "staging",
+                        )
+                    ]
+                    cleared_partitions.update(current_partitions)
+                    if blobs_to_delete:
+                        delete_blobs_list(st.bucket_name, blobs_to_delete)
+
+                # Gerenciamento da tabela (Append/Overwrite)
+                if dump_mode == "overwrite" and not cleared_table:
+                    st.delete_table(
+                        mode="staging", bucket_name=st.bucket_name, not_found_ok=True
+                    )
+                    tb.delete(mode="staging")
+                    cleared_table = True
+
+                if not tb.table_exists(mode="staging"):
+                    header_path = dump_header_to_file(data_path=saved_files[0])
+                    tb.create(
+                        path=header_path,
+                        if_storage_data_exists="replace",
+                        if_table_exists="replace",
+                        biglake_table=biglake_table,
+                        dataset_is_public=dataset_is_public,
+                    )
+                    st.delete_table(
+                        mode="staging", bucket_name=st.bucket_name, not_found_ok=True
+                    )
+                    cleared_table = True
+
+                # Upload e limpeza local
+                tb.append(filepath=prepath, if_exists="replace")
+                shutil.rmtree(prepath)
+
+                # Próximo batch
+                batch = db_object.fetch_batch(batch_size)
+                idx += 1
+
+            # Sucesso, sai do loop de retentativas
+            return cleared_partitions, cleared_table, idx, batchs_len
+
+        except Exception as e:
+            if prepath.exists():
+                shutil.rmtree(prepath)
+            if attempts == 0:
+                log(f"Final attempt failed for query: {query}", level="error")
+                raise e
+            log(
+                f"Query failed. Retrying in {wait_seconds}s. Attempts left: {attempts - 1}",
+                level="error",
+            )
+            attempts -= 1
+            time.sleep(wait_seconds)
+
+    return cleared_partitions, cleared_table, 0, 0  # Se todas as tentativas falharem
+
+
+@task(name="_mappable_worker_task")
+def _mappable_worker_task(query: str, db_conn_details: dict, batch_params: dict):
+    """Task trabalhadora interna para ser usada com .map()."""
+    # Para o worker, o estado é sempre local. Ele assume que a tabela já está pronta
+    # e que ele pode fazer append com segurança.
+    worker_state = {"cleared_partitions": set(), "cleared_table": True}
+    _process_single_query(query, db_conn_details, batch_params, worker_state)
+
+
+@task(
+    name="dump_upload_batch",
+    description="Orchestrates dumping data. Runs sequentially for one query, or in parallel for multiple queries (forcing append).",
+)
+def dump_upload_batch_mappable_task(
+    database_type: str,
+    hostname: str,
+    port: int,
+    user: str,
+    password: str,
+    database: str,
+    queries: List[str],
+    batch_size: int,
+    dataset_id: str,
+    table_id: str,
+    dump_mode: str,
+    charset: str = NOT_SET,
+    partition_columns: List[str] = [],
+    batch_data_type: str = "csv",
+    biglake_table: bool = True,
+    log_number_of_batches: int = 100,
+    retry_dump_upload_attempts: int = 2,
+):
+    """
+    Ponto de entrada principal.
+    - Se 1 query: executa a lógica sequencial original.
+    - Se >1 query: executa uma operação de mapeamento em paralelo, garantindo que os dados sejam anexados.
+    """
+    db_conn_details = {
+        "database_type": database_type,
+        "hostname": hostname,
+        "port": port,
+        "user": user,
+        "password": password,
+        "database": database,
+        "charset": charset,
+    }
+    batch_params = {
+        "batch_size": batch_size,
+        "dataset_id": dataset_id,
+        "table_id": table_id,
+        "dump_mode": dump_mode,
+        "partition_columns": partition_columns,
+        "batch_data_type": batch_data_type,
+        "biglake_table": biglake_table,
+        "log_number_of_batches": log_number_of_batches,
+        "retry_dump_upload_attempts": retry_dump_upload_attempts,
+    }
+
+    if len(queries) <= 1:
+        log("Running in SEQUENTIAL mode.")
+        if not queries:
+            log("No queries provided. Nothing to do.")
+            return
+
+        initial_state = {"cleared_partitions": set(), "cleared_table": False}
+        _process_single_query(queries[0], db_conn_details, batch_params, initial_state)
+
+    else:
+        log(f"Running in PARALLEL mode for {len(queries)} queries.")
+        if dump_mode == "overwrite":
+            log(
+                "WARNING: 'overwrite' is unsafe for parallel runs. The table will be cleared once, then all workers will append.",
+                level="warning",
+            )
+
+        # --- Etapa 1: Preparação da Tabela (execução única) ---
+        tb = bd.Table(dataset_id=dataset_id, table_id=table_id)
+        if dump_mode == "overwrite" and tb.table_exists(mode="staging"):
+            st = bd.Storage(dataset_id=dataset_id, table_id=table_id)
+            st.delete_table(
+                mode="staging", bucket_name=st.bucket_name, not_found_ok=True
+            )
+            tb.delete(mode="staging")
+
+        # Garante que a tabela exista com o schema correto
+        if not tb.table_exists(mode="staging"):
+            log(
+                "Destination table does not exist. Creating it based on the first query's schema."
+            )
+            _process_single_query(
+                queries[0],
+                db_conn_details,
+                {**batch_params, "batch_size": 1},
+                {"cleared_partitions": set(), "cleared_table": False},
+            )
+            tb.delete(
+                mode="staging"
+            )  # Deleta os dados do primeiro batch, mantém o schema
+
+        log("Destination table is ready for parallel appends.")
+
+        # --- Etapa 2: Execução Paralela ---
+        worker_batch_params = {
+            **batch_params,
+            "dump_mode": "append",
+        }  # Workers sempre anexam
+        _mappable_worker_task.map(
+            query=queries,
+            db_conn_details=[db_conn_details] * len(queries),
+            batch_params=[worker_batch_params] * len(queries),
+        )
 
 
 def dump_upload_batch(

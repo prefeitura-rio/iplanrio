@@ -5,6 +5,7 @@ from prefect import task
 
 from iplanrio.pipelines_templates.dump_db.utils import (
     dump_upload_batch,
+    dump_upload_batch_mappable_task,
     format_partitioned_query,
     parse_comma_separated_string_to_list,
 )
