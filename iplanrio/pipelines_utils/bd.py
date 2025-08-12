@@ -6,10 +6,30 @@ import basedosdados as bd
 from basedosdados import Base
 from google.cloud import storage
 from google.cloud.storage.blob import Blob
+from prefect import task
 
 from iplanrio.pipelines_utils.env import get_bd_credentials_from_env
 from iplanrio.pipelines_utils.logging import log
 from iplanrio.pipelines_utils.pandas import dump_header_to_file
+
+
+@task
+def create_table_and_upload_to_gcs_task(
+    data_path: Union[str, Path],
+    dataset_id: str,
+    table_id: str,
+    dump_mode: str,
+    biglake_table: bool = True,
+    source_format: str = "csv",
+) -> Union[str, Path]:
+    return create_table_and_upload_to_gcs(
+        data_path=data_path,
+        dataset_id=dataset_id,
+        table_id=table_id,
+        dump_mode=dump_mode,
+        biglake_table=biglake_table,
+        source_format=source_format,
+    )
 
 
 def create_table_and_upload_to_gcs(
@@ -19,7 +39,7 @@ def create_table_and_upload_to_gcs(
     dump_mode: str,
     biglake_table: bool = True,
     source_format: str = "csv",
-) -> None:
+) -> Union[str, Path]:
     """
     Create table using BD+ and upload to GCS.
     """
