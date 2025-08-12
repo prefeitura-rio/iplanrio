@@ -122,7 +122,7 @@ def database_execute(
         database: The database object.
         query: The query to execute.
     """
-    log(f"Query parsed: {query}")
+    # log(f"Query parsed: {query}")
     query = remove_tabs_from_query(query)
     log(f"Executing query line: {query}")
     database.execute_query(query)
@@ -767,12 +767,14 @@ def build_single_partition_query(
         select * from {aux_name}
         where {partition_column} >= TO_DATE('{last_date}', '{oracle_date_format}')
         """
-
-    query = f"""
-    with {aux_name} as ({query})
-    select * from {aux_name}
-    where CONVERT(DATE, {partition_column}) >= '{last_date}'
-    """
+    elif database_type in ["mysql", "postgres", "sql_server"]:
+        query = f"""
+        with {aux_name} as ({query})
+        select * from {aux_name}
+        where CONVERT(DATE, {partition_column}) >= '{last_date}'
+        """
+    else:
+        raise ValueError(f"Unsupported database type: {database_type}")
 
     return {
         "query": query,
@@ -901,13 +903,15 @@ def build_chunk_query(
         where {partition_column} >= TO_DATE('{current_start.strftime(date_format)}', '{oracle_date_format}')
             and {partition_column} <= TO_DATE('{current_end.strftime(date_format)}', '{oracle_date_format}')
         """
-
-    query = f"""
-    with {aux_name} as ({query})
-    select * from {aux_name}
-    where CONVERT(DATE, {partition_column}) >= '{current_start.strftime(date_format)}'
-        and CONVERT(DATE, {partition_column}) <= '{current_end .strftime(date_format)}'
-    """
+    elif database_type in ["mysql", "postgres", "sql_server"]:
+        query = f"""
+        with {aux_name} as ({query})
+        select * from {aux_name}
+        where CONVERT(DATE, {partition_column}) >= '{current_start.strftime(date_format)}'
+            and CONVERT(DATE, {partition_column}) <= '{current_end .strftime(date_format)}'
+        """
+    else:
+        raise ValueError(f"Unsupported database type: {database_type}")
 
     return {
         "query": query,
