@@ -122,7 +122,7 @@ def final_column_treatment(column: str) -> str:
     try:
         int(column)
         return f"_{column}"
-    except ValueError:  # pylint: disable=bare-except
+    except ValueError:
         non_alpha_removed = re.sub(r"[\W]+", "", column)
         return non_alpha_removed
 

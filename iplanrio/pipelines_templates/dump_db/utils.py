@@ -163,7 +163,7 @@ def _process_single_query(
         charset=charset,
     )
 
-    database_execute(  # pylint: disable=invalid-name
+    database_execute(
         database=db_object,
         query=query,
     )
@@ -329,7 +329,7 @@ def _process_single_query(
                     ),
                     index=idx,
                     mod=log_number_of_batches,
-                )  # pylint: disable=C0301
+                )
 
                 if not cleared_table:
                     st.delete_table(
@@ -345,7 +345,7 @@ def _process_single_query(
                         ),
                         index=idx,
                         mod=log_number_of_batches,
-                    )  # pylint: disable=C0301
+                    )
                     cleared_table = True
         elif dump_mode == "overwrite":
             if tb.table_exists(mode="staging") and not cleared_table:
@@ -357,7 +357,7 @@ def _process_single_query(
                     ),
                     index=idx,
                     mod=log_number_of_batches,
-                )  # pylint: disable=C0301
+                )
                 st.delete_table(
                     mode="staging",
                     bucket_name=st.bucket_name,
@@ -371,7 +371,7 @@ def _process_single_query(
                     ),
                     index=idx,
                     mod=log_number_of_batches,
-                )  # pylint: disable=C0301
+                )
                 # delete only staging table and let DBT overwrite the prod table
                 tb.delete(mode="staging")
                 log_mod(
@@ -381,7 +381,7 @@ def _process_single_query(
                     ),
                     index=idx,
                     mod=log_number_of_batches,
-                )  # pylint: disable=C0301
+                )
 
             if not cleared_table:
                 # the header is needed to create a table when dosen't exist
@@ -399,7 +399,7 @@ def _process_single_query(
                     ),
                     index=idx,
                     mod=log_number_of_batches,
-                )  # pylint: disable=C0301
+                )
 
                 log_mod(
                     msg="MODE OVERWRITE: Table DOSEN'T EXISTS\nStart to CREATE HEADER file",  # noqa
@@ -444,7 +444,7 @@ def _process_single_query(
                     ),
                     index=idx,
                     mod=log_number_of_batches,
-                )  # pylint: disable=C0301
+                )
                 cleared_table = True
 
         log_mod(
@@ -464,7 +464,6 @@ def _process_single_query(
                 # Delete the files
                 saved_file.unlink()
         else:
-            # pylint: disable=C0301
             log_mod(
                 msg="STEP UPLOAD: Table does not exist in STAGING, need to create first",  # noqa
                 index=idx,
@@ -662,7 +661,7 @@ def format_partitioned_query(
     break_query_start: Optional[str] = None,
     break_query_end: Optional[str] = None,
     break_query_frequency: Optional[str] = None,
-    wait: Optional[str] = None,  # pylint: disable=unused-argument
+    wait: Optional[str] = None,
 ) -> List[dict]:
     """
     Formats a query for fetching partitioned data.
@@ -1018,7 +1017,7 @@ def add_months(start_date: datetime, months: int) -> datetime:
 #                     charset=charset,
 #                 )
 
-#                 database_execute(  # pylint: disable=invalid-name
+#                 database_execute(
 #                     database=db_object,
 #                     query=query,
 #                 )
@@ -1191,7 +1190,7 @@ def add_months(start_date: datetime, months: int) -> datetime:
 #                                 ),
 #                                 index=idx,
 #                                 mod=log_number_of_batches,
-#                             )  # pylint: disable=C0301
+#                             )
 
 #                             if not cleared_table:
 #                                 st.delete_table(
@@ -1207,7 +1206,7 @@ def add_months(start_date: datetime, months: int) -> datetime:
 #                                     ),
 #                                     index=idx,
 #                                     mod=log_number_of_batches,
-#                                 )  # pylint: disable=C0301
+#                                 )
 #                                 cleared_table = True
 #                     elif dump_mode == "overwrite":
 #                         if tb.table_exists(mode="staging") and not cleared_table:
@@ -1219,7 +1218,7 @@ def add_months(start_date: datetime, months: int) -> datetime:
 #                                 ),
 #                                 index=idx,
 #                                 mod=log_number_of_batches,
-#                             )  # pylint: disable=C0301
+#                             )
 #                             st.delete_table(
 #                                 mode="staging",
 #                                 bucket_name=st.bucket_name,
@@ -1233,7 +1232,7 @@ def add_months(start_date: datetime, months: int) -> datetime:
 #                                 ),
 #                                 index=idx,
 #                                 mod=log_number_of_batches,
-#                             )  # pylint: disable=C0301
+#                             )
 #                             # delete only staging table and let DBT overwrite the prod table
 #                             tb.delete(mode="staging")
 #                             log_mod(
@@ -1243,7 +1242,7 @@ def add_months(start_date: datetime, months: int) -> datetime:
 #                                 ),
 #                                 index=idx,
 #                                 mod=log_number_of_batches,
-#                             )  # pylint: disable=C0301
+#                             )
 
 #                         if not cleared_table:
 #                             # the header is needed to create a table when dosen't exist
@@ -1261,7 +1260,7 @@ def add_months(start_date: datetime, months: int) -> datetime:
 #                                 ),
 #                                 index=idx,
 #                                 mod=log_number_of_batches,
-#                             )  # pylint: disable=C0301
+#                             )
 
 #                             log_mod(
 #                                 msg="MODE OVERWRITE: Table DOSEN'T EXISTS\nStart to CREATE HEADER file",  # noqa
@@ -1307,7 +1306,7 @@ def add_months(start_date: datetime, months: int) -> datetime:
 #                                 ),
 #                                 index=idx,
 #                                 mod=log_number_of_batches,
-#                             )  # pylint: disable=C0301
+#                             )
 #                             cleared_table = True
 
 #                     log_mod(
@@ -1327,7 +1326,7 @@ def add_months(start_date: datetime, months: int) -> datetime:
 #                             # Delete the files
 #                             saved_file.unlink()
 #                     else:
-#                         # pylint: disable=C0301
+#
 #                         log_mod(
 #                             msg="STEP UPLOAD: Table does not exist in STAGING, need to create first",  # noqa
 #                             index=idx,

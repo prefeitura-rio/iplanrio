@@ -81,7 +81,7 @@ def format_partitioned_query_task(
     break_query_start: Optional[str] = None,
     break_query_end: Optional[str] = None,
     break_query_frequency: Optional[str] = None,
-    wait: Optional[str] = None,  # pylint: disable=unused-argument
+    wait: Optional[str] = None,
 ):
     return format_partitioned_query(
         query=query,

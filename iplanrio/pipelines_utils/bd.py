@@ -45,12 +45,11 @@ def create_table_and_upload_to_gcs(
     """
     bd_version = bd.__version__
     log(f"USING BASEDOSDADOS {bd_version}")
-    # pylint: disable=C0103
     tb = bd.Table(dataset_id=dataset_id, table_id=table_id)
     log(f"Dataset:{dataset_id} Table:{table_id} ")
     table_staging = f"{tb.table_full_name['staging']}"
     log(f"table_staging: {table_staging}")
-    # pylint: disable=C0103
+
     st = bd.Storage(dataset_id=dataset_id, table_id=table_id)
     storage_path = f"{st.bucket_name}.staging.{dataset_id}.{table_id}"
     log(f"storage_path: {storage_path}")
@@ -98,7 +97,7 @@ def create_table_and_upload_to_gcs(
                 "MODE APPEND: Sucessfully CREATED A NEW TABLE:\n"
                 f"{table_staging}\n"
                 f"{storage_path_link}"
-            )  # pylint: disable=C0301
+            )
 
             st.delete_table(
                 mode="staging", bucket_name=st.bucket_name, not_found_ok=True
@@ -107,14 +106,14 @@ def create_table_and_upload_to_gcs(
                 "MODE APPEND: Sucessfully REMOVED HEADER DATA from Storage:\n"
                 f"{storage_path}\n"
                 f"{storage_path_link}"
-            )  # pylint: disable=C0301
+            )
     elif dump_mode == "overwrite":
         if tb.table_exists(mode="staging"):
             log(
                 "MODE OVERWRITE: Table ALREADY EXISTS, DELETING OLD DATA!\n"
                 f"{storage_path}\n"
                 f"{storage_path_link}"
-            )  # pylint: disable=C0301
+            )
             st.delete_table(
                 mode="staging", bucket_name=st.bucket_name, not_found_ok=True
             )
@@ -122,13 +121,13 @@ def create_table_and_upload_to_gcs(
                 "MODE OVERWRITE: Sucessfully DELETED OLD DATA from Storage:\n"
                 f"{storage_path}\n"
                 f"{storage_path_link}"
-            )  # pylint: disable=C0301
+            )
             tb.delete(mode="all")
             log(
                 "MODE OVERWRITE: Sucessfully DELETED TABLE:\n"
                 f"{table_staging}\n"
                 f"{tb.table_full_name['prod']}"
-            )  # pylint: disable=C0301
+            )
 
         # the header is needed to create a table when doesn't exist
         # in overwrite mode the header is always created
@@ -156,7 +155,7 @@ def create_table_and_upload_to_gcs(
             f"MODE OVERWRITE: Sucessfully REMOVED HEADER DATA from Storage\n:"
             f"{storage_path}\n"
             f"{storage_path_link}"
-        )  # pylint: disable=C0301
+        )
 
     #####################################
     #
@@ -175,7 +174,6 @@ def create_table_and_upload_to_gcs(
             f"{storage_path_link}"
         )
     else:
-        # pylint: disable=C0301
         log("STEP UPLOAD: Table does not exist in STAGING, need to create first")
 
     return data_path

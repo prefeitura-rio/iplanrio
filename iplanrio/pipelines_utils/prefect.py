@@ -39,7 +39,7 @@ def rename_current_flow_run_task(new_name: str):
     log(f"Nome da execução do fluxo atualizado para {new_name}!")
 
 
-def generate_dump_db_schedules(  # pylint: disable=too-many-arguments,too-many-locals
+def generate_dump_db_schedules(
     interval: timedelta,
     start_date: datetime,
     db_database: str,
