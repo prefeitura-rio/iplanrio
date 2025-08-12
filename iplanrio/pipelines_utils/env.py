@@ -2,7 +2,7 @@
 import base64
 import json
 from os import environ, getenv
-from typing import List, Union
+from typing import List, Optional, Union
 
 from google.oauth2 import service_account
 from prefect import task
@@ -11,7 +11,7 @@ from iplanrio.pipelines_utils.logging import log
 
 
 def getenv_or_action(
-    key: str, default: str = None, action: str = "raise"
+    key: str, default: Optional[str] = None, action: str = "raise"
 ) -> Union[str, None]:
     """
     Gets an environment variable or executes an action
@@ -34,11 +34,13 @@ def getenv_or_action(
         if action == "raise":
             raise ValueError(f"Environment variable '{key}' not found.")
         elif action == "warn":
-            log.warning(f"Environment variable '{key}' not found.")
+            log(f"Environment variable '{key}' not found.")
     return value
 
 
-def get_database_username_and_password_from_secret_env(secret_path: str = None) -> dict:
+def get_database_username_and_password_from_secret_env(
+    secret_path: str,
+) -> dict:
     secret_path = secret_path.upper().replace("-", "_").replace("/", "")
     return {
         "DB_USERNAME": getenv_or_action(f"{secret_path}__DB_USERNAME"),
@@ -46,13 +48,24 @@ def get_database_username_and_password_from_secret_env(secret_path: str = None) 
     }
 
 
+def validate_bd_credentials():
+    creds_name = [
+        "BASEDOSDADOS_CREDENTIALS_PROD",
+        "BASEDOSDADOS_CREDENTIALS_STAGING",
+        "BASEDOSDADOS_CONFIG",
+    ]
+
+    for cred_name in creds_name:
+        _ = getenv_or_action(cred_name, action="raise")
+
+
 def get_bd_credentials_from_env(
-    mode: str = None, scopes: List[str] = None
+    mode: str, scopes: Optional[List[str]] = None
 ) -> service_account.Credentials:
     """
     Gets credentials from env vars
     """
-
+    validate_bd_credentials()
     if mode not in ["prod", "staging"]:
         raise ValueError("Mode must be 'prod' or 'staging'")
     env: str = getenv(f"BASEDOSDADOS_CREDENTIALS_{mode.upper()}", "")
@@ -62,15 +75,24 @@ def get_bd_credentials_from_env(
     cred: service_account.Credentials = (
         service_account.Credentials.from_service_account_info(info)
     )
-    if scopes:
-        cred = cred.with_scopes(scopes)
+    if not scopes:
+        scopes = [
+            "https://www.googleapis.com/auth/drive",
+            "https://www.googleapis.com/auth/cloud-platform",
+        ]
+    cred = cred.with_scopes(scopes)
     return cred
 
 
 def inject_bd_credentials(environment: str = "prod"):
+    validate_bd_credentials()
     service_account_name = f"BASEDOSDADOS_CREDENTIALS_{environment.upper()}"
     service_account_b64 = getenv_or_action(service_account_name)
-    service_account = base64.b64decode(service_account_b64)
+    if service_account_b64:
+        service_account = base64.b64decode(service_account_b64)
+    else:
+        raise ValueError(f"{service_account_name} env var not set!")
+
     with open("/tmp/credentials.json", "wb") as credentials_file:
         credentials_file.write(service_account)
     environ["GOOGLE_APPLICATION_CREDENTIALS"] = "/tmp/credentials.json"
