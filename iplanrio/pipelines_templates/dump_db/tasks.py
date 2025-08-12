@@ -5,7 +5,6 @@ from prefect import task
 
 from iplanrio.pipelines_templates.dump_db.utils import (
     dump_upload_batch,
-    dump_upload_batch_mappable_task,
     format_partitioned_query,
     parse_comma_separated_string_to_list,
 )
@@ -23,7 +22,7 @@ def get_database_username_and_password_from_secret_task(infisical_secret_path: s
 
 
 @task
-def parse_comma_separated_string_to_list_task(text: str) -> List[str]:
+def parse_comma_separated_string_to_list_task(text: Optional[str]) -> List[str]:
     return parse_comma_separated_string_to_list(text)
 
 
@@ -46,6 +45,7 @@ def dump_upload_batch_task(
     biglake_table: bool = True,
     log_number_of_batches: int = 100,
     retry_dump_upload_attempts: int = 2,
+    max_concurrency: int = 1,
 ):
     dump_upload_batch(
         database_type=database_type,
@@ -65,6 +65,7 @@ def dump_upload_batch_task(
         biglake_table=biglake_table,
         log_number_of_batches=log_number_of_batches,
         retry_dump_upload_attempts=retry_dump_upload_attempts,
+        max_concurrency=max_concurrency,
     )
 
 
