@@ -6,30 +6,10 @@ import basedosdados as bd
 from basedosdados import Base
 from google.cloud import storage
 from google.cloud.storage.blob import Blob
-from prefect import task
 
 from iplanrio.pipelines_utils.env import get_bd_credentials_from_env
 from iplanrio.pipelines_utils.logging import log
 from iplanrio.pipelines_utils.pandas import dump_header_to_file
-
-
-@task
-def create_table_and_upload_to_gcs_task(
-    data_path: Union[str, Path],
-    dataset_id: str,
-    table_id: str,
-    dump_mode: str,
-    biglake_table: bool = True,
-    source_format: str = "csv",
-) -> None:
-    create_table_and_upload_to_gcs(
-        data_path=data_path,
-        dataset_id=dataset_id,
-        table_id=table_id,
-        dump_mode=dump_mode,
-        biglake_table=biglake_table,
-        source_format=source_format,
-    )
 
 
 def create_table_and_upload_to_gcs(
@@ -47,17 +27,22 @@ def create_table_and_upload_to_gcs(
     log(f"USING BASEDOSDADOS {bd_version}")
     # pylint: disable=C0103
     tb = bd.Table(dataset_id=dataset_id, table_id=table_id)
+    log(f"Dataset:{dataset_id} Table:{table_id} ")
     table_staging = f"{tb.table_full_name['staging']}"
+    log(f"table_staging: {table_staging}")
     # pylint: disable=C0103
     st = bd.Storage(dataset_id=dataset_id, table_id=table_id)
     storage_path = f"{st.bucket_name}.staging.{dataset_id}.{table_id}"
+    log(f"storage_path: {storage_path}")
     storage_path_link = (
         f"https://console.cloud.google.com/storage/browser/{st.bucket_name}"
         f"/staging/{dataset_id}/{table_id}"
     )
+    log(f"storage_path_link: {storage_path_link}")
 
     # prod datasets is public if the project is datario. staging are private im both projects
     dataset_is_public = tb.client["bigquery_prod"].project == "datario"
+    log(f"dataset_is_public: {dataset_is_public}")
 
     #####################################
     #
