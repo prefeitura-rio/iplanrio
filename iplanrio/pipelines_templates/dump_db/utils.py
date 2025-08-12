@@ -150,6 +150,7 @@ def _process_single_query(
     # Estado e Informações
     cleared_partitions: Set[str],
     cleared_table: bool,
+    log_prefix: str,
 ) -> Tuple[Set[str], bool, int, int]:
     # Keep track of cleared stuff
     prepath = f"data/{uuid4()}/"
@@ -170,10 +171,10 @@ def _process_single_query(
 
     # Get data columns
     columns = db_object.get_columns()
-    log(f"Got columns: {columns}")
+    log(f"{log_prefix}: Got columns: {columns}")
 
     new_query_cols = build_query_new_columns(table_columns=columns)
-    log(f"New query columns without accents: {new_query_cols}")
+    log(f"{log_prefix}: New query columns without accents: {new_query_cols}")
 
     prepath = Path(prepath)
 
@@ -183,9 +184,11 @@ def _process_single_query(
         partition_column = partition_columns[0]
 
     if not partition_column:
-        log("NO partition column specified! Writing unique files")
+        log(f"{log_prefix}: NO partition column specified! Writing unique files")
     else:
-        log(f"Partition column: {partition_column} FOUND!! Write to partitioned files")
+        log(
+            f"{log_prefix}: Partition column: {partition_column} FOUND!! Write to partitioned files"
+        )
 
     # Now loop until we have no more data.
     batch = db_object.fetch_batch(batch_size)
@@ -195,7 +198,7 @@ def _process_single_query(
         prepath.mkdir(parents=True, exist_ok=True)
         # Log progress each 100 batches.
         log_mod(
-            msg=f"Dumping batch {idx+1} with size {len(batch)}",
+            msg=f"{log_prefix}: Dumping batch {idx+1} with size {len(batch)}",
             index=idx,
             mod=log_number_of_batches,
         )
@@ -236,7 +239,7 @@ def _process_single_query(
         # Log progress each 100 batches.
 
         log_mod(
-            msg=f"Batch generated {len(saved_files)} files. Will now upload.",
+            msg=f"{log_prefix}: Batch generated {len(saved_files)} files. Will now upload.",
             index=idx,
             mod=log_number_of_batches,
         )
@@ -266,7 +269,7 @@ def _process_single_query(
             # Remove duplicates.
             partitions = list(set(partitions))
             log_mod(
-                msg=f"Got partitions: {partitions}",
+                msg=f"{log_prefix}: Got partitions: {partitions}",
                 index=idx,
                 mod=log_number_of_batches,
             )
@@ -284,7 +287,7 @@ def _process_single_query(
             if blobs_to_delete:
                 delete_blobs_list(bucket_name=st.bucket_name, blobs=blobs_to_delete)
                 log_mod(
-                    msg=f"Deleted {len(blobs_to_delete)} blobs from GCS: {blobs_to_delete}",  # noqa
+                    msg=f"{log_prefix}: Deleted {len(blobs_to_delete)} blobs from GCS: {blobs_to_delete}",  # noqa
                     index=idx,
                     mod=log_number_of_batches,
                 )
@@ -292,7 +295,7 @@ def _process_single_query(
             if tb.table_exists(mode="staging"):
                 log_mod(
                     msg=(
-                        "MODE APPEND: Table ALREADY EXISTS:"
+                        f"{log_prefix}: MODE APPEND: Table ALREADY EXISTS:"
                         + f"\n{table_staging}"
                         + f"\n{storage_path_link}"
                     ),
@@ -302,13 +305,14 @@ def _process_single_query(
             else:
                 # the header is needed to create a table when dosen't exist
                 log_mod(
-                    msg="MODE APPEND: Table DOESN'T EXISTS\nStart to CREATE HEADER file",  # noqa
+                    msg=f"{log_prefix}: MODE APPEND: Table DOESN'T EXISTS\nStart to CREATE HEADER file",  # noqa
                     index=idx,
                     mod=log_number_of_batches,
                 )
                 header_path = dump_header_to_file(data_path=saved_files[0])
                 log_mod(
-                    msg="MODE APPEND: Created HEADER file:\n" f"{header_path}",
+                    msg=f"{log_prefix}: MODE APPEND: Created HEADER file:\n"
+                    f"{header_path}",
                     index=idx,
                     mod=log_number_of_batches,
                 )
@@ -323,7 +327,7 @@ def _process_single_query(
 
                 log_mod(
                     msg=(
-                        "MODE APPEND: Sucessfully CREATED A NEW TABLE:\n"
+                        f"{log_prefix}: MODE APPEND: Sucessfully CREATED A NEW TABLE:\n"
                         + f"{table_staging}\n"
                         + f"{storage_path_link}"
                     ),
@@ -339,7 +343,7 @@ def _process_single_query(
                     )
                     log_mod(
                         msg=(
-                            "MODE APPEND: Sucessfully REMOVED HEADER DATA from Storage:\n"  # noqa
+                            f"{log_prefix}: MODE APPEND: Sucessfully REMOVED HEADER DATA from Storage:\n"  # noqa
                             + f"{storage_path}\n"
                             + f"{storage_path_link}"
                         ),
@@ -351,7 +355,7 @@ def _process_single_query(
             if tb.table_exists(mode="staging") and not cleared_table:
                 log_mod(
                     msg=(
-                        "MODE OVERWRITE: Table ALREADY EXISTS, DELETING OLD DATA!\n"
+                        f"{log_prefix}: MODE OVERWRITE: Table ALREADY EXISTS, DELETING OLD DATA!\n"
                         + f"{storage_path}\n"
                         + f"{storage_path_link}"
                     ),
@@ -365,7 +369,7 @@ def _process_single_query(
                 )
                 log_mod(
                     msg=(
-                        "MODE OVERWRITE: Sucessfully DELETED OLD DATA from Storage:\n"
+                        f"{log_prefix}: MODE OVERWRITE: Sucessfully DELETED OLD DATA from Storage:\n"
                         + f"{storage_path}\n"
                         + f"{storage_path_link}"
                     ),
@@ -376,7 +380,7 @@ def _process_single_query(
                 tb.delete(mode="staging")
                 log_mod(
                     msg=(
-                        "MODE OVERWRITE: Sucessfully DELETED TABLE:\n"
+                        f"{log_prefix}: MODE OVERWRITE: Sucessfully DELETED TABLE:\n"
                         + f"{table_staging}\n"
                     ),
                     index=idx,
@@ -393,7 +397,7 @@ def _process_single_query(
                 )
                 log_mod(
                     msg=(
-                        "MODE OVERWRITE: Sucessfully DELETED OLD DATA from Storage:\n"
+                        f"{log_prefix}: MODE OVERWRITE: Sucessfully DELETED OLD DATA from Storage:\n"
                         + f"{storage_path}\n"
                         + f"{storage_path_link}"
                     ),
@@ -402,13 +406,14 @@ def _process_single_query(
                 )
 
                 log_mod(
-                    msg="MODE OVERWRITE: Table DOSEN'T EXISTS\nStart to CREATE HEADER file",  # noqa
+                    msg=f"{log_prefix}: MODE OVERWRITE: Table DOSEN'T EXISTS\nStart to CREATE HEADER file",  # noqa
                     index=idx,
                     mod=log_number_of_batches,
                 )
                 header_path = dump_header_to_file(data_path=saved_files[0])
                 log_mod(
-                    "MODE OVERWRITE: Created HEADER file:\n" f"{header_path}",
+                    f"{log_prefix}: MODE OVERWRITE: Created HEADER file:\n"
+                    f"{header_path}",
                     index=idx,
                     mod=log_number_of_batches,
                 )
@@ -423,7 +428,7 @@ def _process_single_query(
 
                 log_mod(
                     msg=(
-                        "MODE OVERWRITE: Sucessfully CREATED TABLE\n"
+                        f"{log_prefix}: MODE OVERWRITE: Sucessfully CREATED TABLE\n"
                         + f"{table_staging}\n"
                         + f"{storage_path_link}"
                     ),
@@ -438,7 +443,7 @@ def _process_single_query(
                 )
                 log_mod(
                     msg=(
-                        "MODE OVERWRITE: Sucessfully REMOVED HEADER DATA from Storage\n:"  # noqa
+                        f"{log_prefix}: MODE OVERWRITE: Sucessfully REMOVED HEADER DATA from Storage\n:"  # noqa
                         + f"{storage_path}\n"
                         + f"{storage_path_link}"
                     ),
@@ -456,7 +461,7 @@ def _process_single_query(
             # Upload them all at once
             tb.append(filepath=prepath, if_exists="replace")
             log_mod(
-                msg=f"STEP UPLOAD: Sucessfully uploaded batch {idx +1} file with size {len(batch)} to Storage",
+                msg=f"{log_prefix}: STEP UPLOAD: Sucessfully uploaded batch {idx +1} file with size {len(batch)} to Storage",
                 index=idx,
                 mod=log_number_of_batches,
             )
@@ -465,7 +470,7 @@ def _process_single_query(
                 saved_file.unlink()
         else:
             log_mod(
-                msg="STEP UPLOAD: Table does not exist in STAGING, need to create first",  # noqa
+                msg=f"{log_prefix}: STEP UPLOAD: Table does not exist in STAGING, need to create first",  # noqa
                 index=idx,
                 mod=log_number_of_batches,
             )
@@ -475,7 +480,7 @@ def _process_single_query(
 
         # delete batch data from prepath
         shutil.rmtree(prepath)
-    log(msg=f"--- Batchs: {idx}, Rows: {batchs_len} ---")
+    log(msg=f"{log_prefix}: --- Batchs: {idx}, Rows: {batchs_len} ---")
 
     return cleared_partitions, cleared_table, idx, batchs_len
 
@@ -513,51 +518,40 @@ def dump_upload_batch(
 
     async def _run_query_with_retries(
         semaphore: asyncio.Semaphore,
-        query_info: Dict,
-        n_query: int,
-        total_queries: int,
+        log_prefix: str,
         **kwargs,
     ) -> Union[Tuple[Set[str], bool, int, int], Exception]:
         """
         Wrapper que gerencia o semáforo e a lógica de retry para uma única query.
-        Retorna o resultado da função ou a exceção em caso de falha persistente.
         """
         for attempt in range(retry_attempts):
             try:
                 async with semaphore:
-                    progress_percentage = round(100 * (n_query + 1) / total_queries, 2)
-                    log(
-                        f"Iniciando query {n_query + 1} de {total_queries} ({progress_percentage}%) | "
-                    )
+                    # O log de início da query agora usa o prefixo, tornando-o mais claro
+                    log(f"{log_prefix}: Iniciando processamento.")
+                    log(f"{log_prefix}: Tentativa {attempt + 1}/{retry_attempts}.")
 
-                    log(
-                        f"Tentativa {attempt + 1}/{retry_attempts} para a query com datas {query_info['start_date']} a {query_info['end_date']}."
-                    )
-                    # Pega o loop de eventos atual
-                    # loop = asyncio.get_running_loop()
+                    # Adiciona o `log_prefix` aos argumentos que serão passados para a função trabalhadora
+                    kwargs["log_prefix"] = log_prefix  # NOVO
 
-                    # Prepara a função TRABALHADORA (síncrona) para ser executada.
-                    # Assumindo que a trabalhadora se chama `_process_single_query` (e agora é `def`)
                     func_to_run = partial(_process_single_query, **kwargs)
-
-                    # Envia a função bloqueante para um thread separado e aguarda o resultado
                     result = await run_sync_in_worker_thread(func_to_run)
 
+                    log(
+                        f"{log_prefix}: Processamento concluído com sucesso na tentativa {attempt + 1}."
+                    )
                     return result
             except Exception as e:
-                log(
-                    f"Falha na tentativa {attempt + 1} para a query {query_info['start_date']}-{query_info['end_date']}. Erro: {e}"
-                )
+                log(f"{log_prefix}: Falha na tentativa {attempt + 1}. Erro: {e}")
                 if attempt == retry_attempts - 1:
                     log(
-                        f"Todas as {retry_attempts} tentativas falharam. Registrando o erro final."
+                        f"{log_prefix}: Todas as {retry_attempts} tentativas falharam. Registrando o erro final."
                     )
-                    return e  # Retorna a exceção em vez de levantá-la
-
+                    return e
                 await asyncio.sleep(retry_delay_seconds)
-        # Este ponto não deve ser alcançado, mas por segurança:
+
         return RuntimeError(
-            "A lógica de retry terminou sem retornar um resultado ou exceção."
+            f"{log_prefix}: A lógica de retry terminou inesperadamente."
         )
 
     async def _main_async_runner():
@@ -573,6 +567,8 @@ def dump_upload_batch(
         total_queries = len(queries)
 
         for n_query, query_info in enumerate(queries):
+            progress = round(100 * (n_query + 1) / total_queries, 2)
+            log_prefix = f"[Query {n_query + 1}/{total_queries} ({progress}%) | Datas: {query_info.get('start_date')} a {query_info.get('end_date')}]"
             task_args = {
                 "database_type": database_type,
                 "hostname": hostname,
@@ -594,9 +590,8 @@ def dump_upload_batch(
                 "cleared_table": initial_cleared_table,
             }
             # Cria a tarefa com o wrapper de retry
-            # Passamos n_query e total_queries para o wrapper
             task = _run_query_with_retries(
-                semaphore, query_info, n_query, total_queries, **task_args
+                semaphore, log_prefix=log_prefix, **task_args
             )
             tasks_to_run.append(task)
 
