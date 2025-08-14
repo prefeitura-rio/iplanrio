@@ -7,9 +7,9 @@ from functools import partial
 from pathlib import Path
 from typing import Dict, List, Optional, Set, Tuple, Union
 from uuid import uuid4
-import pytz
 
 import basedosdados as bd
+import pytz
 from prefect.utilities.asyncutils import run_sync_in_worker_thread
 
 from iplanrio.pipelines_utils.bd import get_storage_blobs
