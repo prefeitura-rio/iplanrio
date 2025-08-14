@@ -7,6 +7,7 @@ from functools import partial
 from pathlib import Path
 from typing import Dict, List, Optional, Set, Tuple, Union
 from uuid import uuid4
+import pytz
 
 import basedosdados as bd
 from prefect.utilities.asyncutils import run_sync_in_worker_thread
@@ -716,7 +717,8 @@ def get_last_partition_date(
 def get_last_date(
     lower_bound_date: Optional[str], date_format: str, last_partition_date: str
 ) -> str:
-    now: datetime = datetime.now()
+    brazil_timezone = pytz.timezone("America/Sao_Paulo")
+    now: datetime = datetime.now(brazil_timezone)
     if lower_bound_date == "current_year":
         return now.replace(month=1, day=1).strftime(date_format)
     elif lower_bound_date == "current_month":
