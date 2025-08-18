@@ -96,6 +96,14 @@ def execute_dbt_task(
     runner = PrefectDbtRunner(
         raise_on_failure=False  # Allow the flow to handle failures gracefully
     )
+    # Execute the dbt deps command
+    try:
+        deps_result = runner.invoke(["deps"])
+        log("✅ DBT dependencies installed successfully", level="info")
+        log(msg=str(deps_result))
+    except Exception as e:
+        log(f"❌ Error installing DBT dependencies: {e}", level="error")
+        raise
 
     # Execute the dbt command with the constructed arguments
     try:
