@@ -94,8 +94,10 @@ def download_data_from_arcgis_task(
                 processed_data.append(current_attributes)
 
     dataframe = pd.DataFrame(processed_data)
-    dataframe.columns = remove_columns_accents(dataframe)
-
+    log(f"old columns: {list(dataframe.columns)}")
+    new_columns = remove_columns_accents(dataframe=dataframe)
+    log(f"new columns: {new_columns}")
+    dataframe.columns = new_columns
     dataframe = gpd.GeoDataFrame(
         dataframe,
         crs=crs,  # Define o CRS original (UTM)
