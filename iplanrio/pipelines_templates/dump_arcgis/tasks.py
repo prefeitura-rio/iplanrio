@@ -10,6 +10,7 @@ from prefect import task
 from shapely.geometry import Point, Polygon
 
 from iplanrio.pipelines_utils.logging import log
+from iplanrio.pipelines_utils.pandas import remove_columns_accents
 
 
 @task
@@ -93,6 +94,8 @@ def download_data_from_arcgis_task(
                 processed_data.append(current_attributes)
 
     dataframe = pd.DataFrame(processed_data)
+    dataframe.columns = remove_columns_accents(dataframe)
+
     dataframe = gpd.GeoDataFrame(
         dataframe,
         crs=crs,  # Define o CRS original (UTM)
