@@ -5,8 +5,9 @@ Dumping  data from URLs
 """
 
 
-from prefect import flow
 from typing import Optional
+
+from prefect import flow
 
 from iplanrio.pipelines_templates.dump_db.tasks import (
     parse_comma_separated_string_to_list_task,
@@ -14,6 +15,7 @@ from iplanrio.pipelines_templates.dump_db.tasks import (
 from iplanrio.pipelines_templates.dump_url.tasks import download_url, dump_files
 from iplanrio.pipelines_utils.bd import create_table_and_upload_to_gcs_task
 from iplanrio.pipelines_utils.prefect import rename_current_flow_run_task
+
 
 @flow(log_prints=True)
 def dump_url_flow(
@@ -23,17 +25,15 @@ def dump_url_flow(
     gsheets_sheet_order: int = 0,
     gsheets_sheet_name: Optional[str] = None,
     gsheets_sheet_range: Optional[str] = None,
-    
     # Table parameters
     partition_columns: str = "",
     encoding: str = "utf-8",
     on_bad_lines: str = "error",
     separator: str = ",",
-    
     # BigQuery parameters
     dataset_id: Optional[str] = None,
     table_id: Optional[str] = None,
-    dump_mode: str = "overwrite",  # overwrite or append    
+    dump_mode: str = "overwrite",  # overwrite or append
     # JSON dataframe parameters
     dataframe_key_column: Optional[str] = None,
     build_json_dataframe: bool = False,
@@ -59,7 +59,7 @@ def dump_url_flow(
     DATA_PATH = "/tmp/dump_url/"
     DUMP_DATA_PATH = "/tmp/dump_url_chunks/"
     DATA_FNAME = DATA_PATH + "data.csv"
-    
+
     DOWNLOAD_URL_TASK = download_url(
         url=url,
         fname=DATA_FNAME,
@@ -69,7 +69,9 @@ def dump_url_flow(
         gsheets_sheet_range=gsheets_sheet_range,
     )
 
-    partition_columns = parse_comma_separated_string_to_list_task(text=partition_columns)
+    partition_columns = parse_comma_separated_string_to_list_task(
+        text=partition_columns
+    )
 
     DUMP_CHUNKS_TASK = dump_files(
         file_path=DATA_FNAME,
@@ -94,5 +96,3 @@ def dump_url_flow(
         biglake_table=biglake_table,
         dump_mode=dump_mode,
     )
-
-

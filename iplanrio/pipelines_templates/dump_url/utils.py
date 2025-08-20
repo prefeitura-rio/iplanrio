@@ -6,13 +6,14 @@ from pathlib import Path
 from typing import List
 
 import pandas as pd
+
 from iplanrio.pipelines_utils.logging import log
 from iplanrio.pipelines_utils.pandas import (
-    remove_columns_accents,
-    parse_date_columns,
-    to_partitions,
     clean_dataframe,
     dataframe_to_csv,
+    parse_date_columns,
+    remove_columns_accents,
+    to_partitions,
 )
 
 
@@ -73,4 +74,3 @@ def handle_dataframe_chunk(
             build_json_dataframe=build_json_dataframe,
             dataframe_key_column=dataframe_key_column,
         )
-
