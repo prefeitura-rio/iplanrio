@@ -9,6 +9,7 @@ dependencies = [
     "croniter>=6.0.0",
     "cx-oracle>=8.3.0",
     "dbt-bigquery==1.10.1",
+    "geopandas>=1.1.1",
     "gitpython==3.1.44",
     "google-api-python-client>=2.179.0",
     "gspread>=6.2.1",
