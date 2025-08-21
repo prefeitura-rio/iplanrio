@@ -37,6 +37,7 @@ def rj_segovi_dump_db_1746(
     biglake_table: bool = True,
     log_number_of_batches: int = 100,
     max_concurrency: int = 1,
+    only_staging_dataset: bool = False,
 ):
     rename_current_flow_run_task(new_name=table_id)
     inject_bd_credentials_task(environment="prod")  # noqa
@@ -79,4 +80,5 @@ def rj_segovi_dump_db_1746(
         database=db_database,
         charset=db_charset,
         max_concurrency=max_concurrency,
+        only_staging_dataset=only_staging_dataset,
     )

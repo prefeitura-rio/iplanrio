@@ -12,7 +12,7 @@ import basedosdados as bd
 import pytz
 from prefect.utilities.asyncutils import run_sync_in_worker_thread
 
-from iplanrio.pipelines_utils.bd import get_storage_blobs
+from iplanrio.pipelines_utils.bd import _delete_prod_dataset, get_storage_blobs
 from iplanrio.pipelines_utils.constants import NOT_SET
 from iplanrio.pipelines_utils.database_sql import (
     Database,
@@ -152,6 +152,7 @@ def _process_single_query(
     cleared_partitions: Set[str],
     cleared_table: bool,
     log_prefix: str,
+    only_staging_dataset: bool = False,
 ) -> Tuple[Set[str], bool, int, int]:
     # Keep track of cleared stuff
     prepath = f"data/{uuid4()}/"
@@ -453,6 +454,12 @@ def _process_single_query(
                 )
                 cleared_table = True
 
+        if only_staging_dataset:
+            _delete_prod_dataset(
+                only_staging_dataset=only_staging_dataset,
+                dataset_id=dataset_id,
+            )
+
         log_mod(
             msg="STARTING UPLOAD TO GCS",
             index=idx,
@@ -505,6 +512,7 @@ def dump_upload_batch(
     log_number_of_batches: int = 100,
     retry_dump_upload_attempts: int = 2,
     max_concurrency: int = 1,  # Novo parâmetro para definir o limite do semáforo
+    only_staging_dataset: bool = False,
 ):
     """
     Ponto de entrada síncrono que, internamente, cria um loop de eventos asyncio
@@ -589,6 +597,7 @@ def dump_upload_batch(
                 "log_number_of_batches": log_number_of_batches,
                 "cleared_partitions": initial_cleared_partitions,
                 "cleared_table": initial_cleared_table,
+                "only_staging_dataset": only_staging_dataset,
             }
             # Cria a tarefa com o wrapper de retry
             task = _run_query_with_retries(

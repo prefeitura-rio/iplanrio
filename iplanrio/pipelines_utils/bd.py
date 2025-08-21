@@ -21,6 +21,7 @@ def create_table_and_upload_to_gcs_task(
     dump_mode: str,
     biglake_table: bool = True,
     source_format: str = "csv",
+    only_staging_dataset: bool = False,
 ) -> Union[str, Path]:
     return create_table_and_upload_to_gcs(
         data_path=data_path,
@@ -29,7 +30,18 @@ def create_table_and_upload_to_gcs_task(
         dump_mode=dump_mode,
         biglake_table=biglake_table,
         source_format=source_format,
+        only_staging_dataset=only_staging_dataset,
     )
+
+
+def _delete_prod_dataset(only_staging_dataset: bool, dataset_id: str):
+    ds = bd.Dataset(dataset_id=dataset_id)
+    if only_staging_dataset and ds.exists(mode="prod"):
+        try:
+            ds.delete(mode="prod")
+            log("Successfully deleted prod dataset")
+        except Exception as e:
+            log(f"Error while deleting prod dataset: {e}")
 
 
 def create_table_and_upload_to_gcs(
@@ -39,6 +51,7 @@ def create_table_and_upload_to_gcs(
     dump_mode: str,
     biglake_table: bool = True,
     source_format: str = "csv",
+    only_staging_dataset: bool = False,
 ) -> Union[str, Path]:
     """
     Create table using BD+ and upload to GCS.
@@ -157,6 +170,10 @@ def create_table_and_upload_to_gcs(
             f"{storage_path_link}"
         )
 
+    if only_staging_dataset:
+        _delete_prod_dataset(
+            only_staging_dataset=only_staging_dataset, dataset_id=dataset_id
+        )
     #####################################
     #
     # Uploads a bunch of files using BD+

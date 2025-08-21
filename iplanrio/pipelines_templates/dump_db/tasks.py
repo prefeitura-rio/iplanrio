@@ -46,6 +46,7 @@ def dump_upload_batch_task(
     log_number_of_batches: int = 100,
     retry_dump_upload_attempts: int = 2,
     max_concurrency: int = 1,
+    only_staging_dataset: bool = False,
 ):
     dump_upload_batch(
         database_type=database_type,
@@ -66,6 +67,7 @@ def dump_upload_batch_task(
         log_number_of_batches=log_number_of_batches,
         retry_dump_upload_attempts=retry_dump_upload_attempts,
         max_concurrency=max_concurrency,
+        only_staging_dataset=only_staging_dataset,
     )
 
 
