@@ -21,15 +21,27 @@ def create_table_and_upload_to_gcs_task(
     dump_mode: str,
     biglake_table: bool = True,
     source_format: str = "csv",
-) -> None:
-    create_table_and_upload_to_gcs(
+    only_staging_dataset: bool = False,
+) -> Union[str, Path]:
+    return create_table_and_upload_to_gcs(
         data_path=data_path,
         dataset_id=dataset_id,
         table_id=table_id,
         dump_mode=dump_mode,
         biglake_table=biglake_table,
         source_format=source_format,
+        only_staging_dataset=only_staging_dataset,
     )
+
+
+def _delete_prod_dataset(only_staging_dataset: bool, dataset_id: str):
+    ds = bd.Dataset(dataset_id=dataset_id)
+    if only_staging_dataset and ds.exists(mode="prod"):
+        try:
+            ds.delete(mode="prod")
+            log("Successfully deleted prod dataset")
+        except Exception as e:
+            log(f"Error while deleting prod dataset: {e}")
 
 
 def create_table_and_upload_to_gcs(
@@ -39,25 +51,30 @@ def create_table_and_upload_to_gcs(
     dump_mode: str,
     biglake_table: bool = True,
     source_format: str = "csv",
-) -> None:
+    only_staging_dataset: bool = False,
+) -> Union[str, Path]:
     """
     Create table using BD+ and upload to GCS.
     """
     bd_version = bd.__version__
     log(f"USING BASEDOSDADOS {bd_version}")
-    # pylint: disable=C0103
     tb = bd.Table(dataset_id=dataset_id, table_id=table_id)
+    log(f"Dataset:{dataset_id} Table:{table_id} ")
     table_staging = f"{tb.table_full_name['staging']}"
-    # pylint: disable=C0103
+    log(f"table_staging: {table_staging}")
+
     st = bd.Storage(dataset_id=dataset_id, table_id=table_id)
     storage_path = f"{st.bucket_name}.staging.{dataset_id}.{table_id}"
+    log(f"storage_path: {storage_path}")
     storage_path_link = (
         f"https://console.cloud.google.com/storage/browser/{st.bucket_name}"
         f"/staging/{dataset_id}/{table_id}"
     )
+    log(f"storage_path_link: {storage_path_link}")
 
     # prod datasets is public if the project is datario. staging are private im both projects
     dataset_is_public = tb.client["bigquery_prod"].project == "datario"
+    log(f"dataset_is_public: {dataset_is_public}")
 
     #####################################
     #
@@ -93,7 +110,7 @@ def create_table_and_upload_to_gcs(
                 "MODE APPEND: Sucessfully CREATED A NEW TABLE:\n"
                 f"{table_staging}\n"
                 f"{storage_path_link}"
-            )  # pylint: disable=C0301
+            )
 
             st.delete_table(
                 mode="staging", bucket_name=st.bucket_name, not_found_ok=True
@@ -102,14 +119,14 @@ def create_table_and_upload_to_gcs(
                 "MODE APPEND: Sucessfully REMOVED HEADER DATA from Storage:\n"
                 f"{storage_path}\n"
                 f"{storage_path_link}"
-            )  # pylint: disable=C0301
+            )
     elif dump_mode == "overwrite":
         if tb.table_exists(mode="staging"):
             log(
                 "MODE OVERWRITE: Table ALREADY EXISTS, DELETING OLD DATA!\n"
                 f"{storage_path}\n"
                 f"{storage_path_link}"
-            )  # pylint: disable=C0301
+            )
             st.delete_table(
                 mode="staging", bucket_name=st.bucket_name, not_found_ok=True
             )
@@ -117,13 +134,13 @@ def create_table_and_upload_to_gcs(
                 "MODE OVERWRITE: Sucessfully DELETED OLD DATA from Storage:\n"
                 f"{storage_path}\n"
                 f"{storage_path_link}"
-            )  # pylint: disable=C0301
+            )
             tb.delete(mode="all")
             log(
                 "MODE OVERWRITE: Sucessfully DELETED TABLE:\n"
                 f"{table_staging}\n"
                 f"{tb.table_full_name['prod']}"
-            )  # pylint: disable=C0301
+            )
 
         # the header is needed to create a table when doesn't exist
         # in overwrite mode the header is always created
@@ -151,8 +168,12 @@ def create_table_and_upload_to_gcs(
             f"MODE OVERWRITE: Sucessfully REMOVED HEADER DATA from Storage\n:"
             f"{storage_path}\n"
             f"{storage_path_link}"
-        )  # pylint: disable=C0301
+        )
 
+    if only_staging_dataset:
+        _delete_prod_dataset(
+            only_staging_dataset=only_staging_dataset, dataset_id=dataset_id
+        )
     #####################################
     #
     # Uploads a bunch of files using BD+
@@ -170,7 +191,6 @@ def create_table_and_upload_to_gcs(
             f"{storage_path_link}"
         )
     else:
-        # pylint: disable=C0301
         log("STEP UPLOAD: Table does not exist in STAGING, need to create first")
 
     return data_path

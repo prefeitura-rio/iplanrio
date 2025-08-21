@@ -122,7 +122,7 @@ def final_column_treatment(column: str) -> str:
     try:
         int(column)
         return f"_{column}"
-    except ValueError:  # pylint: disable=bare-except
+    except ValueError:
         non_alpha_removed = re.sub(r"[\W]+", "", column)
         return non_alpha_removed
 
@@ -188,6 +188,8 @@ def remove_columns_accents(dataframe: pd.DataFrame) -> list:
         .str.replace("\v", "_")
         .str.replace("\f", "_")
         .str.replace("\r", "_")
+        .str.replace("(", "_")
+        .str.replace(")", "_")
         .str.lower()
         .map(final_column_treatment)
     )

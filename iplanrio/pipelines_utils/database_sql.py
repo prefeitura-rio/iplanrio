@@ -17,7 +17,6 @@ class Database(ABC):
     Database abstract class.
     """
 
-    # pylint: disable=too-many-arguments
     def __init__(
         self,
         hostname: str,
@@ -90,7 +89,6 @@ class SqlServer(Database):
     SQL Server database.
     """
 
-    # pylint: disable=too-many-arguments
     def __init__(
         self,
         hostname: str,
@@ -172,7 +170,6 @@ class MySql(Database):
     MySQL database.
     """
 
-    # pylint: disable=too-many-arguments
     def __init__(
         self,
         hostname: str,
@@ -208,7 +205,6 @@ class MySql(Database):
         """
         Connect to the MySQL.
         """
-        # pylint: disable=E1101
         return pymysql.connect(
             host=self._hostname,
             port=self._port,
@@ -257,7 +253,6 @@ class Oracle(Database):
     Oracle Database
     """
 
-    # pylint: disable=too-many-arguments
     def __init__(
         self,
         hostname: str,
@@ -289,7 +284,6 @@ class Oracle(Database):
         """
         Connect to the Oracle.
         """
-        # pylint: disable=E1101
         return cx_Oracle.connect(
             f"{self._user}/{self._password}@"
             f"{self._hostname}:{self._port}/{self._database}"
@@ -334,7 +328,6 @@ class Postgres(Database):
     PostgreSQL database.
     """
 
-    # pylint: disable=too-many-arguments
     def __init__(
         self,
         hostname: str,
