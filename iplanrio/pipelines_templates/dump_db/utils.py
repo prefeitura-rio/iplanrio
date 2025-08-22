@@ -325,6 +325,7 @@ def _process_single_query(
                     if_table_exists="replace",
                     biglake_table=biglake_table,
                     dataset_is_public=dataset_is_public,
+                    set_biglake_connection_permissions=False,
                 )
 
                 log_mod(
@@ -426,6 +427,7 @@ def _process_single_query(
                     if_table_exists="replace",
                     biglake_table=biglake_table,
                     dataset_is_public=dataset_is_public,
+                    set_biglake_connection_permissions=False,
                 )
 
                 log_mod(
@@ -1184,13 +1186,14 @@ def add_months(start_date: datetime, months: int) -> datetime:
 #                                 mod=log_number_of_batches,
 #                             )
 
-#                             tb.create(
-#                                 path=header_path,
-#                                 if_storage_data_exists="replace",
-#                                 if_table_exists="replace",
-#                                 biglake_table=biglake_table,
-#                                 dataset_is_public=dataset_is_public,
-#                             )
+# tb.create(
+#     path=header_path,
+#     if_storage_data_exists="replace",
+#     if_table_exists="replace",
+#     biglake_table=biglake_table,
+#     dataset_is_public=dataset_is_public,
+#     set_biglake_connection_permissions=False,
+# )
 
 #                             log_mod(
 #                                 msg=(
@@ -1285,13 +1288,14 @@ def add_months(start_date: datetime, months: int) -> datetime:
 #                                 mod=log_number_of_batches,
 #                             )
 
-#                             tb.create(
-#                                 path=header_path,
-#                                 if_storage_data_exists="replace",
-#                                 if_table_exists="replace",
-#                                 biglake_table=biglake_table,
-#                                 dataset_is_public=dataset_is_public,
-#                             )
+# tb.create(
+#     path=header_path,
+#     if_storage_data_exists="replace",
+#     if_table_exists="replace",
+#     biglake_table=biglake_table,
+#     dataset_is_public=dataset_is_public,
+#     set_biglake_connection_permissions=False,
+# )
 
 #                             log_mod(
 #                                 msg=(

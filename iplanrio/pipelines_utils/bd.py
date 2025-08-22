@@ -104,6 +104,7 @@ def create_table_and_upload_to_gcs(
                 biglake_table=biglake_table,
                 dataset_is_public=dataset_is_public,
                 source_format=source_format,
+                set_biglake_connection_permissions=False,
             )
 
             log(
@@ -155,6 +156,7 @@ def create_table_and_upload_to_gcs(
             biglake_table=biglake_table,
             dataset_is_public=dataset_is_public,
             source_format=source_format,
+            set_biglake_connection_permissions=False,
         )
 
         log(
