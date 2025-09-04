@@ -154,7 +154,7 @@ def _process_single_query(
     cleared_table: bool,
     log_prefix: str,
     only_staging_dataset: bool = False,
-    add_timestamp_column: bool = False
+    add_timestamp_column: bool = False,
 ) -> Tuple[Set[str], bool, int, int]:
     # Keep track of cleared stuff
     prepath = f"data/{uuid4()}/"
