@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import re
+from datetime import datetime
 from os import walk
 from os.path import join
 from pathlib import Path
@@ -125,6 +126,28 @@ def final_column_treatment(column: str) -> str:
     except ValueError:
         non_alpha_removed = re.sub(r"[\W]+", "", column)
         return non_alpha_removed
+
+
+def add_ingestion_timestamp(dataframe: pd.DataFrame) -> pd.DataFrame:
+    """
+    Adds a timestamp column indicating when the data was extracted.
+
+    Args:
+        dataframe: The DataFrame to add the timestamp to
+
+    Returns:
+        DataFrame with the _prefect_extracted_at column added
+    """
+    ingestion_col = "_prefect_extracted_at"
+
+    if ingestion_col in dataframe.columns:
+        raise ValueError(
+            f"Column {ingestion_col} already exists, please review your model."
+        )
+
+    dataframe[ingestion_col] = datetime.now()
+
+    return dataframe
 
 
 def parse_date_columns(

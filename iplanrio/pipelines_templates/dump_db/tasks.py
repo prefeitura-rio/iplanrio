@@ -26,7 +26,7 @@ def parse_comma_separated_string_to_list_task(text: Optional[str]) -> List[str]:
     return parse_comma_separated_string_to_list(text)
 
 
-@task
+@task(retries=3)
 def dump_upload_batch_task(
     database_type: str,
     hostname: str,
