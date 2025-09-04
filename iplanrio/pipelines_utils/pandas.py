@@ -131,20 +131,22 @@ def final_column_treatment(column: str) -> str:
 def add_ingestion_timestamp(dataframe: pd.DataFrame) -> pd.DataFrame:
     """
     Adds a timestamp column indicating when the data was extracted.
-    
+
     Args:
         dataframe: The DataFrame to add the timestamp to
-        
+
     Returns:
         DataFrame with the _prefect_extracted_at column added
     """
     ingestion_col = "_prefect_extracted_at"
-    
+
     if ingestion_col in dataframe.columns:
-        raise ValueError(f"Column {ingestion_col} already exists, please review your model.")
-    
+        raise ValueError(
+            f"Column {ingestion_col} already exists, please review your model."
+        )
+
     dataframe[ingestion_col] = datetime.now()
-    
+
     return dataframe
 
 

@@ -32,6 +32,7 @@ from iplanrio.pipelines_utils.io import (
 )
 from iplanrio.pipelines_utils.logging import log, log_mod
 from iplanrio.pipelines_utils.pandas import (
+    add_ingestion_timestamp,
     batch_to_dataframe,
     build_query_new_columns,
     clean_dataframe,
@@ -41,7 +42,6 @@ from iplanrio.pipelines_utils.pandas import (
     parse_date_columns,
     remove_columns_accents,
     to_partitions,
-    add_ingestion_timestamp,
 )
 
 
