@@ -154,6 +154,7 @@ def _process_single_query(
     cleared_table: bool,
     log_prefix: str,
     only_staging_dataset: bool = False,
+    add_timestamp_column: bool = False
 ) -> Tuple[Set[str], bool, int, int]:
     # Keep track of cleared stuff
     prepath = f"data/{uuid4()}/"
@@ -213,7 +214,8 @@ def _process_single_query(
         dataframe.columns = remove_columns_accents(dataframe)
         new_columns_dict = dict(zip(old_columns, dataframe.columns.tolist()))
         dataframe = clean_dataframe(dataframe)
-        dataframe = add_ingestion_timestamp(dataframe)
+        if add_timestamp_column:
+            dataframe = add_ingestion_timestamp(dataframe)
         saved_files = []
         if partition_column:
             dataframe, date_partition_columns = parse_date_columns(
@@ -918,7 +920,7 @@ def build_chunk_query(
         with {aux_name} as ({query})
         select * from {aux_name}
         where CONVERT(DATE, CAST({partition_column} AS VARCHAR)) >= '{current_start.strftime(date_format)}'
-            and CONVERT(DATE, {partition_column}) <= '{current_end .strftime(date_format)}'
+            and CONVERT(DATE, CAST({partition_column} AS VARCHAR)) <= '{current_end .strftime(date_format)}'
         """
     elif database_type in ["mysql", "postgres"]:
         query = f"""
