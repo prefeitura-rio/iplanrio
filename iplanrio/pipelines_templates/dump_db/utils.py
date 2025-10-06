@@ -516,7 +516,7 @@ def dump_upload_batch(
     batch_data_type: str = "csv",
     biglake_table: bool = True,
     log_number_of_batches: int = 100,
-    retry_dump_upload_attempts: int = 2,
+    retry_dump_upload_attempts: int = 3,
     max_concurrency: int = 1,  # Novo parâmetro para definir o limite do semáforo
     only_staging_dataset: bool = False,
     add_timestamp_column: bool = False

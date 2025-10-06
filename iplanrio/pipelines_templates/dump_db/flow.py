@@ -31,7 +31,7 @@ def rj_segovi_dump_db_1746(
     break_query_frequency: Optional[str] = None,
     break_query_start: Optional[str] = None,
     break_query_end: Optional[str] = None,
-    retry_dump_upload_attempts: int = 1,
+    retry_dump_upload_attempts: int = 3,
     batch_size: int = 50000,
     batch_data_type: str = "csv",
     biglake_table: bool = True,
