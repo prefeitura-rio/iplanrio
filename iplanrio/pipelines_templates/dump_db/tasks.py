@@ -47,7 +47,7 @@ def dump_upload_batch_task(
     retry_dump_upload_attempts: int = 2,
     max_concurrency: int = 1,
     only_staging_dataset: bool = False,
-    add_timestamp_column: bool = False
+    add_timestamp_column: bool = False,
 ):
     dump_upload_batch(
         database_type=database_type,
@@ -69,7 +69,7 @@ def dump_upload_batch_task(
         retry_dump_upload_attempts=retry_dump_upload_attempts,
         max_concurrency=max_concurrency,
         only_staging_dataset=only_staging_dataset,
-        add_timestamp_column=add_timestamp_column
+        add_timestamp_column=add_timestamp_column,
     )
 
 
