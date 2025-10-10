@@ -530,7 +530,7 @@ def dump_upload_batch(
 
     # --- Início da lógica assíncrona interna ---
     retry_attempts = retry_dump_upload_attempts
-    retry_delay_seconds = 30
+    retry_delay_seconds = 300
 
     async def _run_query_with_retries(
         semaphore: asyncio.Semaphore,
