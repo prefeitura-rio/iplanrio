@@ -7,7 +7,7 @@ import geopandas as gpd
 import pandas as pd
 import requests
 from prefect import task
-from shapely.geometry import Point, Polygon
+from shapely.geometry import LineString, Point, Polygon
 
 from iplanrio.pipelines_utils.logging import log
 from iplanrio.pipelines_utils.pandas import remove_columns_accents
@@ -91,6 +91,11 @@ def download_data_from_arcgis_task(
                 current_attributes["latitude"] = geometry_data.get("y")
                 current_attributes["longitude"] = geometry_data.get("x")
                 current_attributes["geometry"] = point
+                processed_data.append(current_attributes)
+            elif geometry_data.get("paths"):
+                # Acessa a primeira lista de caminhos e cria a LineString
+                line = LineString(geometry_data["paths"][0])
+                current_attributes["geometry"] = line
                 processed_data.append(current_attributes)
 
     dataframe = pd.DataFrame(processed_data)
