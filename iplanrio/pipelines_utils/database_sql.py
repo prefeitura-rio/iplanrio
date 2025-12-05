@@ -8,6 +8,7 @@ from typing import List
 
 import cx_Oracle
 import psycopg2
+import pymongo
 import pymysql.cursors
 import pyodbc
 
@@ -399,3 +400,128 @@ class Postgres(Database):
         Fetches all rows from the PostgreSQL database.
         """
         return self._cursor.fetchall()
+
+
+class MongoDB(Database):
+    """
+    MongoDB database. Compatible with MongoDB 3.4+
+    """
+
+    def __init__(
+        self,
+        hostname: str,
+        user: str,
+        password: str,
+        database: str,
+        port: int = 27017,
+        **kwargs,
+    ) -> None:
+        """
+        Initializes the MongoDB database.
+
+        Args:
+            hostname: The hostname of the database.
+            port: The port of the database.
+            user: The username of the database.
+            password: The password of the database.
+            database: The database name.
+        """
+        port = port if isinstance(port, int) else int(port)
+        self._collection_name = None
+        self._documents = []
+        self._current_index = 0
+        self._columns = []
+        super().__init__(
+            hostname,
+            port,
+            user,
+            password,
+            database,
+        )
+
+    def connect(self):
+        """
+        Connect to the MongoDB.
+        """
+        connection_string = (
+            f"mongodb://{self._user}:{self._password}@"
+            f"{self._hostname}:{self._port}/{self._database}"
+        )
+        client = pymongo.MongoClient(connection_string)
+        return client[self._database]
+
+    def get_cursor(self):
+        """
+        Returns a cursor for the MongoDB (the database object itself).
+        """
+        return self._connection
+
+    def execute_query(self, query: str) -> None:
+        """
+        Execute query on the MongoDB.
+        For MongoDB, the 'query' parameter should be the collection name. Example: 'FILES.files' or 'FILES.chunks'
+
+        Args:
+            query: The collection name to query (format: database.collection or just collection).
+        """
+        collection_name = query.strip()
+
+        # If the query contains a dot, it's in format "database.collection"
+        if "." in collection_name:
+            collection_name = collection_name.split(".")[-1]
+
+        self._collection_name = collection_name
+        # Get the collection
+        collection = self._cursor[collection_name]
+        # Fetch all documents from the collection
+        self._documents = list(collection.find())
+
+        # Determine columns based on keys in documents
+        if self._documents:
+            all_keys = set()
+            for doc in self._documents:
+                all_keys.update(doc.keys())
+            self._columns = sorted(list(all_keys))
+        else:
+            self._columns = []
+
+        # Reset index for fetching
+        self._current_index = 0
+
+    def get_columns(self) -> List[str]:
+        """
+        Returns the column names of the MongoDB collection.
+        """
+        return self._columns
+
+    def fetch_batch(self, batch_size: int) -> List[List]:
+        """
+        Fetches a batch of documents from the MongoDB collection.
+        Converts documents to lists based on column order.
+        """
+        batch = []
+        end_index = min(self._current_index + batch_size, len(self._documents))
+
+        for i in range(self._current_index, end_index):
+            doc = self._documents[i]
+            # Convert document to list based on column order
+            row = []
+            for col in self._columns:
+                value = doc.get(col)
+                # Convert ObjectId to string for compatibility
+                if isinstance(value, pymongo.objectid.ObjectId):
+                    value = str(value)
+                # Convert Binary data to string representation
+                elif isinstance(value, bytes):
+                    value = value.hex()
+                row.append(value)
+            batch.append(row)
+
+        self._current_index = end_index
+        return batch
+
+    def fetch_all(self) -> List[List]:
+        """
+        Fetches all remaining documents from the MongoDB collection.
+        """
+        return self.fetch_batch(len(self._documents) - self._current_index)

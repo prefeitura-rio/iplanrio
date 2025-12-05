@@ -17,6 +17,7 @@ dependencies = [
     "prefect==3.4.9",
     "prefect-dbt==0.7.5",
     "psycopg2-binary>=2.9.10",
+    "pymongo>=4.10.1",
     "pymysql>=1.1.1",
     "pyodbc>=5.2.0",
     "pytz>=2025.2",

@@ -16,6 +16,7 @@ from iplanrio.pipelines_utils.bd import _delete_prod_dataset, get_storage_blobs
 from iplanrio.pipelines_utils.constants import NOT_SET
 from iplanrio.pipelines_utils.database_sql import (
     Database,
+    MongoDB,
     MySql,
     Oracle,
     Postgres,
@@ -95,6 +96,7 @@ def database_get_db(
     """
 
     DATABASE_MAPPING: Dict[str, type[Database]] = {
+        "mongodb": MongoDB,
         "mysql": MySql,
         "oracle": Oracle,
         "postgres": Postgres,
