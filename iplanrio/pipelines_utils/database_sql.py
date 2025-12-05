@@ -3,11 +3,11 @@
 Database definitions for SQL pipelines.
 """
 
-from abc import ABC, abstractmethod
-from typing import List
 import base64
 import json
+from abc import ABC, abstractmethod
 from datetime import datetime
+from typing import List
 
 import cx_Oracle
 import psycopg2
