@@ -5,6 +5,9 @@ Database definitions for SQL pipelines.
 
 from abc import ABC, abstractmethod
 from typing import List
+import base64
+import json
+from datetime import datetime
 
 import cx_Oracle
 import psycopg2
@@ -427,9 +430,7 @@ class MongoDB(Database):
             database: The database name.
         """
         port = port if isinstance(port, int) else int(port)
-        self._collection_name = None
-        self._documents = []
-        self._current_index = 0
+        self._mongo_cursor = None
         self._columns = []
         super().__init__(
             hostname,
@@ -446,47 +447,38 @@ class MongoDB(Database):
         connection_string = (
             f"mongodb://{self._user}:{self._password}@"
             f"{self._hostname}:{self._port}/{self._database}"
+            f"?authSource=admin"
         )
-        client = pymongo.MongoClient(connection_string)
+        client = pymongo.MongoClient(connection_string, serverSelectionTimeoutMS=5000)
+        client.server_info()
         return client[self._database]
 
     def get_cursor(self):
         """
-        Returns a cursor for the MongoDB (the database object itself).
+        Returns a cursor for the MongoDB.
         """
         return self._connection
 
     def execute_query(self, query: str) -> None:
         """
         Execute query on the MongoDB.
-        For MongoDB, the 'query' parameter should be the collection name. Example: 'FILES.files' or 'FILES.chunks'
 
         Args:
-            query: The collection name to query (format: database.collection or just collection).
+            query: The collection name to query.
         """
-        collection_name = query.strip()
-
-        # If the query contains a dot, it's in format "database.collection"
-        if "." in collection_name:
-            collection_name = collection_name.split(".")[-1]
-
-        self._collection_name = collection_name
-        # Get the collection
+        collection_name = query.strip().split(".")[-1]
         collection = self._cursor[collection_name]
-        # Fetch all documents from the collection
-        self._documents = list(collection.find())
 
-        # Determine columns based on keys in documents
-        if self._documents:
+        sample_docs = list(collection.find().limit(100))
+        if sample_docs:
             all_keys = set()
-            for doc in self._documents:
+            for doc in sample_docs:
                 all_keys.update(doc.keys())
             self._columns = sorted(list(all_keys))
         else:
             self._columns = []
 
-        # Reset index for fetching
-        self._current_index = 0
+        self._mongo_cursor = collection.find()
 
     def get_columns(self) -> List[str]:
         """
@@ -497,31 +489,36 @@ class MongoDB(Database):
     def fetch_batch(self, batch_size: int) -> List[List]:
         """
         Fetches a batch of documents from the MongoDB collection.
-        Converts documents to lists based on column order.
         """
         batch = []
-        end_index = min(self._current_index + batch_size, len(self._documents))
-
-        for i in range(self._current_index, end_index):
-            doc = self._documents[i]
-            # Convert document to list based on column order
-            row = []
-            for col in self._columns:
-                value = doc.get(col)
-                # Convert ObjectId to string for compatibility
-                if isinstance(value, pymongo.objectid.ObjectId):
-                    value = str(value)
-                # Convert Binary data to string representation
-                elif isinstance(value, bytes):
-                    value = value.hex()
-                row.append(value)
-            batch.append(row)
-
-        self._current_index = end_index
+        try:
+            for _ in range(batch_size):
+                doc = next(self._mongo_cursor)
+                row = []
+                for col in self._columns:
+                    value = doc.get(col)
+                    if isinstance(value, pymongo.objectid.ObjectId):
+                        value = str(value)
+                    elif isinstance(value, bytes):
+                        value = base64.b64encode(value).decode("utf-8")
+                    elif isinstance(value, datetime):
+                        value = value.isoformat()
+                    elif isinstance(value, (dict, list)):
+                        value = json.dumps(value, default=str)
+                    row.append(value)
+                batch.append(row)
+        except StopIteration:
+            pass
         return batch
 
     def fetch_all(self) -> List[List]:
         """
         Fetches all remaining documents from the MongoDB collection.
         """
-        return self.fetch_batch(len(self._documents) - self._current_index)
+        all_rows = []
+        while True:
+            batch = self.fetch_batch(1000)
+            if not batch:
+                break
+            all_rows.extend(batch)
+        return all_rows
