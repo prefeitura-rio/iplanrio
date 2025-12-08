@@ -417,6 +417,7 @@ class MongoDB(Database):
         password: str,
         database: str,
         port: int = 27017,
+        auth_source: str = "admin",
         **kwargs,
     ) -> None:
         """
@@ -428,10 +429,12 @@ class MongoDB(Database):
             user: The username of the database.
             password: The password of the database.
             database: The database name.
+            auth_source: The authentication source database. Defaults to "admin".
         """
         port = port if isinstance(port, int) else int(port)
         self._mongo_cursor = None
         self._columns = []
+        self._auth_source = auth_source
         super().__init__(
             hostname,
             port,
@@ -447,7 +450,7 @@ class MongoDB(Database):
         connection_string = (
             f"mongodb://{self._user}:{self._password}@"
             f"{self._hostname}:{self._port}/{self._database}"
-            f"?authSource=admin"
+            f"?authSource={self._auth_source}"
         )
         client = pymongo.MongoClient(connection_string, serverSelectionTimeoutMS=5000)
         client.server_info()
