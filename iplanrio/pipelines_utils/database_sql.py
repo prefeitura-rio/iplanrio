@@ -485,11 +485,30 @@ class MongoDB(Database):
             mongo_filter = json.loads(filter_str)
             # Auto-convert 24-char hex strings to ObjectId for fields ending with _id
             for key, value in mongo_filter.items():
-                if key.endswith("_id") and isinstance(value, str) and len(value) == 24:
+                if not key.endswith("_id"):
+                    continue
+
+                # Simple value: "files_id": "xxx"
+                if isinstance(value, str) and len(value) == 24:
                     try:
                         mongo_filter[key] = ObjectId(value)
                     except Exception:
                         pass
+
+                # Operator with array: "files_id": {"$in": ["xxx", "yyy"]}
+                elif isinstance(value, dict):
+                    for op_key, op_value in value.items():
+                        if isinstance(op_value, list):
+                            converted_list = []
+                            for item in op_value:
+                                if isinstance(item, str) and len(item) == 24:
+                                    try:
+                                        converted_list.append(ObjectId(item))
+                                    except Exception:
+                                        converted_list.append(item)
+                                else:
+                                    converted_list.append(item)
+                            value[op_key] = converted_list
         else:
             collection_name = query
             mongo_filter = {}
