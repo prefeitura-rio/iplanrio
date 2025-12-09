@@ -483,6 +483,13 @@ class MongoDB(Database):
             import json
 
             mongo_filter = json.loads(filter_str)
+            # Auto-convert 24-char hex strings to ObjectId for fields ending with _id
+            for key, value in mongo_filter.items():
+                if key.endswith("_id") and isinstance(value, str) and len(value) == 24:
+                    try:
+                        mongo_filter[key] = ObjectId(value)
+                    except Exception:
+                        pass
         else:
             collection_name = query
             mongo_filter = {}
