@@ -481,6 +481,7 @@ class MongoDB(Database):
             filter_str = filter_str.strip()
             # Parse JSON filter
             import json
+
             mongo_filter = json.loads(filter_str)
         else:
             collection_name = query
