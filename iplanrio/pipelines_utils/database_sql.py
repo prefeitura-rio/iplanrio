@@ -502,9 +502,13 @@ class MongoDB(Database):
                             total_size += len(value)
 
                 if binary_fields:
-                    avg_binary_size = total_size / (len(sample_docs[:10]) * len(set(binary_fields)))
+                    avg_binary_size = total_size / (
+                        len(sample_docs[:10]) * len(set(binary_fields))
+                    )
                     log(f"   Binary fields detected: {list(set(binary_fields))}")
-                    log(f"   Average binary field size: {avg_binary_size:,.0f} bytes ({avg_binary_size/1024:,.2f} KB)")
+                    log(
+                        f"   Average binary field size: {avg_binary_size:,.0f} bytes ({avg_binary_size/1024:,.2f} KB)"
+                    )
                     log(f"   ⚠️  Large binary data will slow down processing")
 
                     # Estimate processing time
