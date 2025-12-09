@@ -509,7 +509,9 @@ class MongoDB(Database):
                         value = value.isoformat()
                     elif isinstance(value, (dict, list)):
                         value = json.dumps(value, default=str)
-                    elif value is not None and not isinstance(value, (str, int, float, bool)):
+                    elif value is not None and not isinstance(
+                        value, (str, int, float, bool)
+                    ):
                         # Convert any other non-basic type (Decimal128, Timestamp, etc.) to string
                         value = str(value)
                     row.append(value)
