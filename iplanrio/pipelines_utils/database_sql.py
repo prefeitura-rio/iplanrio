@@ -16,6 +16,8 @@ import pymysql.cursors
 import pyodbc
 from bson import ObjectId
 
+from iplanrio.pipelines_utils.logging import log
+
 
 class Database(ABC):
     """
@@ -436,6 +438,8 @@ class MongoDB(Database):
         self._mongo_cursor = None
         self._columns = []
         self._auth_source = auth_source
+        self._batch_counter = 0
+        self._total_binary_bytes = 0
         super().__init__(
             hostname,
             port,
@@ -473,12 +477,39 @@ class MongoDB(Database):
         collection_name = query.strip()
         collection = self._cursor[collection_name]
 
+        # Log collection stats
+        total_docs = collection.count_documents({})
+        log(f"📊 MongoDB Collection Stats for '{collection_name}':")
+        log(f"   Total documents: {total_docs:,}")
+
         sample_docs = list(collection.find().limit(100))
         if sample_docs:
             all_keys = set()
             for doc in sample_docs:
                 all_keys.update(doc.keys())
             self._columns = sorted(list(all_keys))
+
+            # Analyze data sizes in sample
+            log(f"   Columns found: {self._columns}")
+            if sample_docs:
+                # Calculate average document size
+                total_size = 0
+                binary_fields = []
+                for doc in sample_docs[:10]:  # Check first 10 docs
+                    for key, value in doc.items():
+                        if isinstance(value, bytes):
+                            binary_fields.append(key)
+                            total_size += len(value)
+
+                if binary_fields:
+                    avg_binary_size = total_size / (len(sample_docs[:10]) * len(set(binary_fields)))
+                    log(f"   Binary fields detected: {list(set(binary_fields))}")
+                    log(f"   Average binary field size: {avg_binary_size:,.0f} bytes ({avg_binary_size/1024:,.2f} KB)")
+                    log(f"   ⚠️  Large binary data will slow down processing")
+
+                    # Estimate processing time
+                    estimated_batches = (total_docs + 50000 - 1) // 50000
+                    log(f"   Estimated batches (50k docs/batch): {estimated_batches:,}")
         else:
             self._columns = []
 
