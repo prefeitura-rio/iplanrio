@@ -469,7 +469,7 @@ class MongoDB(Database):
         Args:
             query: The collection name to query.
         """
-        collection_name = query.strip().split(".")[-1]
+        collection_name = query.strip()
         collection = self._cursor[collection_name]
 
         sample_docs = list(collection.find().limit(100))
