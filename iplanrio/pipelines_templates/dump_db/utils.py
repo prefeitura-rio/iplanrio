@@ -16,6 +16,7 @@ from iplanrio.pipelines_utils.bd import _delete_prod_dataset, get_storage_blobs
 from iplanrio.pipelines_utils.constants import NOT_SET
 from iplanrio.pipelines_utils.database_sql import (
     Database,
+    MongoDB,
     MySql,
     Oracle,
     Postgres,
@@ -78,6 +79,7 @@ def database_get_db(
     password: str,
     database: str,
     charset: str = NOT_SET,
+    auth_source: str = NOT_SET,
 ) -> Database:
     """
     Returns a database object.
@@ -89,12 +91,15 @@ def database_get_db(
         user: The username of the database.
         password: The password of the database.
         database: The database name.
+        charset: The charset of the database (optional).
+        auth_source: The authentication source database (MongoDB only, optional).
 
     Returns:
         A database object.
     """
 
     DATABASE_MAPPING: Dict[str, type[Database]] = {
+        "mongodb": MongoDB,
         "mysql": MySql,
         "oracle": Oracle,
         "postgres": Postgres,
@@ -103,14 +108,22 @@ def database_get_db(
 
     if database_type not in DATABASE_MAPPING:
         raise ValueError(f"Unknown database type: {database_type}")
-    return DATABASE_MAPPING[database_type](
-        hostname=hostname,
-        port=port,
-        user=user,
-        password=password,
-        database=database,
-        charset=charset if charset != NOT_SET else None,
-    )
+
+    kwargs = {
+        "hostname": hostname,
+        "port": port,
+        "user": user,
+        "password": password,
+        "database": database,
+    }
+
+    if charset != NOT_SET:
+        kwargs["charset"] = charset
+
+    if database_type == "mongodb" and auth_source != NOT_SET:
+        kwargs["auth_source"] = auth_source
+
+    return DATABASE_MAPPING[database_type](**kwargs)
 
 
 def database_execute(
@@ -139,6 +152,7 @@ def _process_single_query(
     password: str,
     database: str,
     charset: str,
+    auth_source: str,
     # Parâmetros de Batch e Tabela
     query: str,
     batch_size: int,
@@ -166,6 +180,7 @@ def _process_single_query(
         password=password,
         database=database,
         charset=charset,
+        auth_source=auth_source,
     )
 
     database_execute(
@@ -512,6 +527,7 @@ def dump_upload_batch(
     table_id: str,
     dump_mode: str,
     charset: str = NOT_SET,
+    auth_source: str = NOT_SET,
     partition_columns: List[str] = [],
     batch_data_type: str = "csv",
     biglake_table: bool = True,
@@ -519,7 +535,7 @@ def dump_upload_batch(
     retry_dump_upload_attempts: int = 3,
     max_concurrency: int = 1,  # Novo parâmetro para definir o limite do semáforo
     only_staging_dataset: bool = False,
-    add_timestamp_column: bool = False
+    add_timestamp_column: bool = False,
 ):
     """
     Ponto de entrada síncrono que, internamente, cria um loop de eventos asyncio
@@ -593,6 +609,7 @@ def dump_upload_batch(
                 "password": password,
                 "database": database,
                 "charset": charset,
+                "auth_source": auth_source,
                 "query": query_info["query"],
                 "batch_size": batch_size,
                 "dataset_id": dataset_id,
@@ -605,7 +622,7 @@ def dump_upload_batch(
                 "cleared_partitions": initial_cleared_partitions,
                 "cleared_table": initial_cleared_table,
                 "only_staging_dataset": only_staging_dataset,
-                "add_timestamp_column": add_timestamp_column
+                "add_timestamp_column": add_timestamp_column,
             }
             # Cria a tarefa com o wrapper de retry
             task = _run_query_with_retries(

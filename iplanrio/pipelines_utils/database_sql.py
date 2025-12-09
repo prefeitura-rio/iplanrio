@@ -3,11 +3,15 @@
 Database definitions for SQL pipelines.
 """
 
+import base64
+import json
 from abc import ABC, abstractmethod
+from datetime import datetime
 from typing import List
 
 import cx_Oracle
 import psycopg2
+import pymongo
 import pymysql.cursors
 import pyodbc
 
@@ -399,3 +403,125 @@ class Postgres(Database):
         Fetches all rows from the PostgreSQL database.
         """
         return self._cursor.fetchall()
+
+
+class MongoDB(Database):
+    """
+    MongoDB database. Compatible with MongoDB 3.4+
+    """
+
+    def __init__(
+        self,
+        hostname: str,
+        user: str,
+        password: str,
+        database: str,
+        port: int = 27017,
+        auth_source: str = "admin",
+        **kwargs,
+    ) -> None:
+        """
+        Initializes the MongoDB database.
+
+        Args:
+            hostname: The hostname of the database.
+            port: The port of the database.
+            user: The username of the database.
+            password: The password of the database.
+            database: The database name.
+            auth_source: The authentication source database. Defaults to "admin".
+        """
+        port = port if isinstance(port, int) else int(port)
+        self._mongo_cursor = None
+        self._columns = []
+        self._auth_source = auth_source
+        super().__init__(
+            hostname,
+            port,
+            user,
+            password,
+            database,
+        )
+
+    def connect(self):
+        """
+        Connect to the MongoDB.
+        """
+        connection_string = (
+            f"mongodb://{self._user}:{self._password}@"
+            f"{self._hostname}:{self._port}/{self._database}"
+            f"?authSource={self._auth_source}"
+        )
+        client = pymongo.MongoClient(connection_string, serverSelectionTimeoutMS=5000)
+        client.server_info()
+        return client[self._database]
+
+    def get_cursor(self):
+        """
+        Returns a cursor for the MongoDB.
+        """
+        return self._connection
+
+    def execute_query(self, query: str) -> None:
+        """
+        Execute query on the MongoDB.
+
+        Args:
+            query: The collection name to query.
+        """
+        collection_name = query.strip().split(".")[-1]
+        collection = self._cursor[collection_name]
+
+        sample_docs = list(collection.find().limit(100))
+        if sample_docs:
+            all_keys = set()
+            for doc in sample_docs:
+                all_keys.update(doc.keys())
+            self._columns = sorted(list(all_keys))
+        else:
+            self._columns = []
+
+        self._mongo_cursor = collection.find()
+
+    def get_columns(self) -> List[str]:
+        """
+        Returns the column names of the MongoDB collection.
+        """
+        return self._columns
+
+    def fetch_batch(self, batch_size: int) -> List[List]:
+        """
+        Fetches a batch of documents from the MongoDB collection.
+        """
+        batch = []
+        try:
+            for _ in range(batch_size):
+                doc = next(self._mongo_cursor)
+                row = []
+                for col in self._columns:
+                    value = doc.get(col)
+                    if isinstance(value, pymongo.objectid.ObjectId):
+                        value = str(value)
+                    elif isinstance(value, bytes):
+                        value = base64.b64encode(value).decode("utf-8")
+                    elif isinstance(value, datetime):
+                        value = value.isoformat()
+                    elif isinstance(value, (dict, list)):
+                        value = json.dumps(value, default=str)
+                    row.append(value)
+                batch.append(row)
+        except StopIteration:
+            pass
+        return batch
+
+    def fetch_all(self) -> List[List]:
+        """
+        Fetches all remaining documents from the MongoDB collection.
+        """
+        all_rows = []
+        while True:
+            batch = self.fetch_batch(1000)
+            if not batch:
+                break
+            all_rows.extend(batch)
+        return all_rows
