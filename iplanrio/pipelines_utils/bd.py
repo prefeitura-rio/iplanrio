@@ -137,11 +137,11 @@ def create_table_and_upload_to_gcs(
                 f"{storage_path}\n"
                 f"{storage_path_link}"
             )
-            tb.delete(mode="all")
+            tb.delete(mode="staging")
             log(
                 "MODE OVERWRITE: Sucessfully DELETED TABLE:\n"
                 f"{table_staging}\n"
-                f"{tb.table_full_name['prod']}"
+                # f"{tb.table_full_name['prod']}"
             )
 
         # the header is needed to create a table when doesn't exist
