@@ -4,7 +4,6 @@
 Dumping  data from URLs
 """
 
-
 from typing import Optional
 
 from prefect import flow
