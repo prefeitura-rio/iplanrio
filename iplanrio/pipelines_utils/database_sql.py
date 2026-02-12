@@ -3,12 +3,17 @@
 Database definitions for SQL pipelines.
 """
 
+import base64
+import json
 from abc import ABC, abstractmethod
+from datetime import datetime
 from typing import List
 
 import psycopg2
+import pymongo
 import pymysql.cursors
 import pyodbc
+from bson import ObjectId
 
 
 class Database(ABC):
@@ -404,3 +409,174 @@ class Postgres(Database):
         Fetches all rows from the PostgreSQL database.
         """
         return self._cursor.fetchall()
+
+
+class MongoDB(Database):
+    """
+    MongoDB database. Compatible with MongoDB 3.4+
+    """
+
+    def __init__(
+        self,
+        hostname: str,
+        user: str,
+        password: str,
+        database: str,
+        port: int = 27017,
+        auth_source: str = "admin",
+        **kwargs,
+    ) -> None:
+        """
+        Initializes the MongoDB database.
+
+        Args:
+            hostname: The hostname of the database.
+            port: The port of the database.
+            user: The username of the database.
+            password: The password of the database.
+            database: The database name.
+            auth_source: The authentication source database. Defaults to "admin".
+        """
+        port = port if isinstance(port, int) else int(port)
+        self._mongo_cursor = None
+        self._columns = []
+        self._auth_source = auth_source
+        super().__init__(
+            hostname,
+            port,
+            user,
+            password,
+            database,
+        )
+
+    def connect(self):
+        """
+        Connect to the MongoDB.
+        """
+        connection_string = (
+            f"mongodb://{self._user}:{self._password}@"
+            f"{self._hostname}:{self._port}/{self._database}"
+            f"?authSource={self._auth_source}"
+        )
+        client = pymongo.MongoClient(connection_string, serverSelectionTimeoutMS=5000)
+        client.server_info()
+        return client[self._database]
+
+    def get_cursor(self):
+        """
+        Returns a cursor for the MongoDB.
+        """
+        return self._connection
+
+    def execute_query(self, query: str) -> None:
+        """
+        Execute query on the MongoDB.
+
+        Args:
+            query: The collection name to query. Optionally include a filter using pipe separator:
+                   "COLLECTION" or "COLLECTION|{filter}"
+                   Example: "FILES.chunks|{\"files_id\": \"xxx\"}"
+        """
+        query = query.strip()
+
+        # Parse collection name and optional filter
+        if "|" in query:
+            collection_name, filter_str = query.split("|", 1)
+            collection_name = collection_name.strip()
+            filter_str = filter_str.strip()
+            # Parse JSON filter
+            import json
+
+            mongo_filter = json.loads(filter_str)
+            # Auto-convert 24-char hex strings to ObjectId for fields ending with _id
+            for key, value in mongo_filter.items():
+                if not key.endswith("_id"):
+                    continue
+
+                # Simple value: "files_id": "xxx"
+                if isinstance(value, str) and len(value) == 24:
+                    try:
+                        mongo_filter[key] = ObjectId(value)
+                    except Exception:
+                        pass
+
+                # Operator with array: "files_id": {"$in": ["xxx", "yyy"]}
+                elif isinstance(value, dict):
+                    for op_key, op_value in value.items():
+                        if isinstance(op_value, list):
+                            converted_list = []
+                            for item in op_value:
+                                if isinstance(item, str) and len(item) == 24:
+                                    try:
+                                        converted_list.append(ObjectId(item))
+                                    except Exception:
+                                        converted_list.append(item)
+                                else:
+                                    converted_list.append(item)
+                            value[op_key] = converted_list
+        else:
+            collection_name = query
+            mongo_filter = {}
+
+        collection = self._cursor[collection_name]
+
+        # Get sample docs with filter
+        sample_docs = list(collection.find(mongo_filter).limit(100))
+        if sample_docs:
+            all_keys = set()
+            for doc in sample_docs:
+                all_keys.update(doc.keys())
+            self._columns = sorted(list(all_keys))
+        else:
+            self._columns = []
+
+        # Create cursor with filter
+        self._mongo_cursor = collection.find(mongo_filter)
+
+    def get_columns(self) -> List[str]:
+        """
+        Returns the column names of the MongoDB collection.
+        """
+        return self._columns
+
+    def fetch_batch(self, batch_size: int) -> List[List]:
+        """
+        Fetches a batch of documents from the MongoDB collection.
+        """
+        batch = []
+        try:
+            for _ in range(batch_size):
+                doc = next(self._mongo_cursor)
+                row = []
+                for col in self._columns:
+                    value = doc.get(col)
+                    if isinstance(value, ObjectId):
+                        value = str(value)
+                    elif isinstance(value, bytes):
+                        value = base64.b64encode(value).decode("utf-8")
+                    elif isinstance(value, datetime):
+                        value = value.isoformat()
+                    elif isinstance(value, (dict, list)):
+                        value = json.dumps(value, default=str)
+                    elif value is not None and not isinstance(
+                        value, (str, int, float, bool)
+                    ):
+                        # Convert any other non-basic type (Decimal128, Timestamp, etc.) to string
+                        value = str(value)
+                    row.append(value)
+                batch.append(row)
+        except StopIteration:
+            pass
+        return batch
+
+    def fetch_all(self) -> List[List]:
+        """
+        Fetches all remaining documents from the MongoDB collection.
+        """
+        all_rows = []
+        while True:
+            batch = self.fetch_batch(1000)
+            if not batch:
+                break
+            all_rows.extend(batch)
+        return all_rows
