@@ -9,7 +9,6 @@ from abc import ABC, abstractmethod
 from datetime import datetime
 from typing import List
 
-import cx_Oracle
 import psycopg2
 import pymongo
 import pymysql.cursors
@@ -287,11 +286,17 @@ class Oracle(Database):
 
     def connect(self):
         """
-        Connect to the Oracle.
+        Connect to the Oracle database.
+
+        Uses lazy import of oracledb to avoid import errors when
+        Oracle database support is not needed.
         """
-        return cx_Oracle.connect(
-            f"{self._user}/{self._password}@"
-            f"{self._hostname}:{self._port}/{self._database}"
+        import oracledb  # Lazy import - only loaded when Oracle is used
+
+        return oracledb.connect(
+            user=self._user,
+            password=self._password,
+            dsn=f"{self._hostname}:{self._port}/{self._database}",
         )
 
     def get_cursor(self):
