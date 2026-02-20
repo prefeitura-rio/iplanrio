@@ -2,6 +2,7 @@
 """
 General purpose tasks for dumping data from URLs.
 """
+
 from pathlib import Path
 from typing import List
 
