@@ -2,6 +2,7 @@
 """
 General purpose tasks for dumping data from URLs.
 """
+
 from pathlib import Path
 from typing import List
 
@@ -40,9 +41,7 @@ def handle_dataframe_chunk(
     new_columns_dict = dict(zip(old_columns, dataframe.columns.tolist()))
     if idx == 0:
         if partition_column:
-            log(
-                f"Partition column: {partition_column} FOUND!! Write to partitioned files"
-            )
+            log(f"Partition column: {partition_column} FOUND!! Write to partitioned files")
 
         else:
             log("NO partition column specified! Writing unique files")
@@ -52,13 +51,9 @@ def handle_dataframe_chunk(
     dataframe = clean_dataframe(dataframe)
 
     if partition_column:
-        dataframe, date_partition_columns = parse_date_columns(
-            dataframe, new_columns_dict[partition_column]
-        )
+        dataframe, date_partition_columns = parse_date_columns(dataframe, new_columns_dict[partition_column])
 
-        partitions = date_partition_columns + [
-            new_columns_dict[col] for col in partition_columns[1:]
-        ]
+        partitions = date_partition_columns + [new_columns_dict[col] for col in partition_columns[1:]]
         to_partitions(
             data=dataframe,
             partition_columns=partitions,
@@ -70,7 +65,7 @@ def handle_dataframe_chunk(
     else:
         dataframe_to_csv(
             dataframe=dataframe,
-            path=Path(save_path) / f"{event_id}-{idx}.csv",
+            filepath=Path(save_path) / f"{event_id}-{idx}.csv",
             build_json_dataframe=build_json_dataframe,
             dataframe_key_column=dataframe_key_column,
         )
