@@ -40,6 +40,7 @@ def dump_upload_batch_task(
     table_id: str,
     dump_mode: str,
     charset: str = NOT_SET,
+    auth_source: str = NOT_SET,
     partition_columns: List[str] = [],
     batch_data_type: str = "csv",
     biglake_table: bool = True,
@@ -47,7 +48,7 @@ def dump_upload_batch_task(
     retry_dump_upload_attempts: int = 3,
     max_concurrency: int = 1,
     only_staging_dataset: bool = False,
-    add_timestamp_column: bool = False
+    add_timestamp_column: bool = False,
 ):
     dump_upload_batch(
         database_type=database_type,
@@ -62,6 +63,7 @@ def dump_upload_batch_task(
         table_id=table_id,
         dump_mode=dump_mode,
         charset=charset,
+        auth_source=auth_source,
         partition_columns=partition_columns,
         batch_data_type=batch_data_type,
         biglake_table=biglake_table,
@@ -69,7 +71,7 @@ def dump_upload_batch_task(
         retry_dump_upload_attempts=retry_dump_upload_attempts,
         max_concurrency=max_concurrency,
         only_staging_dataset=only_staging_dataset,
-        add_timestamp_column=add_timestamp_column
+        add_timestamp_column=add_timestamp_column,
     )
 
 
