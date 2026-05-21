@@ -732,7 +732,7 @@ def get_last_partition_date(
 
 
 def get_last_date(
-    lower_bound_date: Optional[str], offset: Optional[int], date_format: str, last_partition_date: str
+    lower_bound_date: Optional[str], date_format: str, last_partition_date: str, offset: Optional[int] = None
 ) -> str:
     brazil_timezone = pytz.timezone("America/Sao_Paulo")
     now: datetime = datetime.now(brazil_timezone)
