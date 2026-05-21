@@ -3,12 +3,12 @@ name = "iplanrio"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
-requires-python = ">=3.12"
+requires-python = ">=3.13,<3.14"
 dependencies = [
     "basedosdados[upload]==2.0.3",
     "croniter>=6.0.0",
     "oracledb>=2.0.0",
-    "dbt-bigquery>=1.10.3",
+    "dbt-bigquery==1.11.1",
     "geopandas>=1.1.1",
     "gitpython==3.1.44",
     "google-api-python-client>=2.179.0",
@@ -23,3 +23,8 @@ dependencies = [
     "requests>=2.32.4",
     "setuptools>=82.0.1",
 ]
+
+[tool.uv]
+# prefect==3.4.9 declara click<8.2 mas funciona com 8.3 na prática.
+# Override necessário porque dbt-core>=1.11.3 exige click>=8.3.
+override-dependencies = ["click>=8.3.0,<9.0"]
