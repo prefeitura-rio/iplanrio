@@ -7,7 +7,7 @@ from functools import partial
 from pathlib import Path
 from typing import Dict, List, Optional, Set, Tuple, Union
 from uuid import uuid4
-
+from dateutil.relativedelta import relativedelta
 import basedosdados as bd
 import pytz
 from prefect.utilities.asyncutils import run_sync_in_worker_thread
@@ -738,16 +738,14 @@ def get_last_date(
     now: datetime = datetime.now(brazil_timezone)
     if lower_bound_date == "current_year":
         return now.replace(month=1, day=1).strftime(date_format)
-    elif lower_bound_date == "previous_year":
-        return (now - timedelta(years=offset)).strftime(date_format)
     elif lower_bound_date == "current_month":
         return now.replace(day=1).strftime(date_format)
     elif lower_bound_date == "previous_month":
-        return (now - timedelta(months=offset)).strftime(date_format)
+        return (now - relativedelta(months=offset)).replace(day=1).strftime(date_format)
     elif lower_bound_date == "current_day":
         return now.strftime(date_format)
     elif lower_bound_date == "previous_day":
-        return (now - timedelta(days=offset)).strftime(date_format)
+        return (now - relativedelta(days=offset)).strftime(date_format)
     elif lower_bound_date:
         if last_partition_date:
             return min(
