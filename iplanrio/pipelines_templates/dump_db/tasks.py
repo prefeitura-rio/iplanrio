@@ -86,6 +86,7 @@ def format_partitioned_query_task(
     break_query_end: Optional[str] = None,
     break_query_frequency: Optional[str] = None,
     wait: Optional[str] = None,
+    offset: Optional[int] = 1
 ):
     return format_partitioned_query(
         query=query,
@@ -99,4 +100,5 @@ def format_partitioned_query_task(
         break_query_end=break_query_end,
         break_query_frequency=break_query_frequency,
         wait=wait,
+        offset=offset
     )
