@@ -675,6 +675,7 @@ def format_partitioned_query(
     break_query_end: Optional[str] = None,
     break_query_frequency: Optional[str] = None,
     wait: Optional[str] = None,
+    offset: Optional[int] = 1
 ) -> List[dict]:
     """
     Formats a query for fetching partitioned data.
@@ -705,6 +706,7 @@ def format_partitioned_query(
                 last_partition_date=last_partition_date,
                 date_format=date_format,
                 database_type=database_type,
+                offset=offset,
             )
         ]
 
@@ -718,6 +720,7 @@ def format_partitioned_query(
         break_query_frequency=break_query_frequency,
         lower_bound_date=lower_bound_date,
         last_partition_date=last_partition_date,
+        offset=offset
     )
 
 
@@ -732,7 +735,7 @@ def get_last_partition_date(
 
 
 def get_last_date(
-    lower_bound_date: Optional[str], date_format: str, last_partition_date: str, offset: Optional[int] = None
+    lower_bound_date: Optional[str], date_format: str, last_partition_date: str, offset: Optional[int] = 1
 ) -> str:
     brazil_timezone = pytz.timezone("America/Sao_Paulo")
     now: datetime = datetime.now(brazil_timezone)
@@ -766,11 +769,13 @@ def build_single_partition_query(
     last_partition_date: str,
     date_format: str,
     database_type: str,
+    offset: Optional[int]
 ) -> dict:
     last_date = get_last_date(
         lower_bound_date=lower_bound_date,
         date_format=date_format,
         last_partition_date=last_partition_date,
+        offset=offset
     )
     aux_name = f"a{uuid4().hex}"[:8]
 
@@ -811,16 +816,19 @@ def build_chunked_queries(
     break_query_frequency: Optional[str],
     lower_bound_date: Optional[str],
     last_partition_date: str,
+    offset: Optional[int]
 ) -> List[dict]:
     start_date_str = get_last_date(
         lower_bound_date=break_query_start,
         date_format=date_format,
         last_partition_date=None,
+        offset=offset
     )
     end_date_str = get_last_date(
         lower_bound_date=break_query_end,
         date_format=date_format,
         last_partition_date=None,
+        offset=offset
     )
     end_date = datetime.strptime(end_date_str, date_format)
 
