@@ -790,7 +790,12 @@ def build_single_partition_query(
         select * from {aux_name}
         where {partition_column} >= TO_DATE('{last_date}', '{oracle_date_format}')
         """
-    elif database_type in ["mysql", "postgres", "sql_server"]:
+    elif database_type == "mysql":
+        query = f"""
+        select * from ({query}) as subquery
+        where DATE({partition_column}) >= '{last_date}'
+        """
+    elif database_type in ["postgres", "sql_server"]:
         query = f"""
         with {aux_name} as ({query})
         select * from {aux_name}
@@ -929,14 +934,20 @@ def build_chunk_query(
         where {partition_column} >= TO_DATE('{current_start.strftime(date_format)}', '{oracle_date_format}')
             and {partition_column} <= TO_DATE('{current_end.strftime(date_format)}', '{oracle_date_format}')
         """
-    elif database_type in ["sql_server"]:
+    elif database_type == "sql_server":
         query = f"""
         with {aux_name} as ({query})
         select * from {aux_name}
         where CONVERT(DATE, CAST({partition_column} AS VARCHAR)) >= '{current_start.strftime(date_format)}'
             and CONVERT(DATE, CAST({partition_column} AS VARCHAR)) <= '{current_end .strftime(date_format)}'
         """
-    elif database_type in ["mysql", "postgres"]:
+    elif database_type == "mysql":
+        query = f"""
+        select * from ({query}) as subquery
+        where DATE({partition_column}) >= '{current_start.strftime(date_format)}'
+            and DATE({partition_column}) <= '{current_end .strftime(date_format)}'
+        """
+    elif database_type == "postgres":
         query = f"""
         with {aux_name} as ({query})
         select * from {aux_name}
