@@ -1,4 +1,10 @@
 # -*- coding: utf-8 -*-
+"""Utilitários para integração com DBT (Data Build Tool) via Prefect.
+
+Fornece funções para download de repositórios Git contendo projetos DBT
+e execução de comandos DBT (run, test, build, source freshness, etc.)
+com suporte a targets, seleção de modelos e flags customizados.
+"""
 import os
 import shutil
 
@@ -10,8 +16,20 @@ from iplanrio.pipelines_utils.logging import log
 
 
 def download_repository(git_repository_path: str) -> str:
-    """
-    Downloads the repository specified by the REPOSITORY_URL.
+    """Clona repositório Git contendo projeto DBT.
+
+    Remove diretório existente se houver, clona o repositório e verifica
+    presença de pasta 'queries'.
+
+    Args:
+        git_repository_path: URL do repositório Git.
+
+    Returns:
+        Caminho do diretório 'queries' se existir, senão caminho raiz do repositório.
+
+    Raises:
+        ValueError: Se git_repository_path não for fornecido.
+        Exception: Se houver erro ao criar diretório ou clonar repositório.
     """
     if not git_repository_path:
         raise ValueError("git_repository_path is required")
@@ -55,19 +73,25 @@ def execute_dbt_task(
     flag: str = "",
     git_repository_path: str = "https://github.com/prefeitura-rio/queries-rj-iplanrio",
 ):
-    """
-    Executes a dbt command using PrefectDbtRunner from prefect-dbt.
+    """Executa comando DBT via Prefect usando PrefectDbtRunner.
+
+    Baixa o repositório, instala dependências DBT e executa o comando especificado
+    com os argumentos fornecidos.
 
     Args:
-        command (str): DBT command to execute (run, test, build, source freshness, deps, etc.)
-        target (str): DBT target environment (dev, prod, etc.)
-        select (str): DBT select argument for filtering models
-        exclude (str): DBT exclude argument for filtering models
-        state (str): DBT state argument for incremental processing
-        flag (str): Additional DBT flags
+        command: Comando DBT a executar ("run", "test", "build", "source freshness", etc.).
+        target: Ambiente de destino DBT ("dev", "prod", etc.).
+        select: Argumento select do DBT para filtrar models.
+        exclude: Argumento exclude do DBT para filtrar models.
+        state: Argumento state do DBT para processamento incremental.
+        flag: Flags adicionais do DBT.
+        git_repository_path: URL do repositório Git com projeto DBT.
 
     Returns:
-        PrefectDbtResult: Result of the DBT command execution
+        Resultado da execução do comando DBT.
+
+    Raises:
+        Exception: Se houver erro ao instalar dependências ou executar comando.
     """
     _ = download_repository(git_repository_path=git_repository_path)
 

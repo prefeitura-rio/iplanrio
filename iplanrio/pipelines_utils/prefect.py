@@ -1,4 +1,10 @@
 # -*- coding: utf-8 -*-
+"""Utilitários para integração e gerenciamento de fluxos Prefect.
+
+Fornece funções para renomeação de flow runs, geração de schedules para dumps
+de bancos de dados, deleção em lote de execuções e criação de configurações
+YAML para deployments com múltiplos schedules escalonados.
+"""
 import asyncio
 import time
 from datetime import datetime, timedelta
@@ -19,8 +25,10 @@ from iplanrio.pipelines_utils.logging import log
 
 @task
 def rename_current_flow_run_task(new_name: str):
-    """
-    Atualiza o nome da execução do fluxo atual.
+    """Atualiza o nome da execução atual do fluxo Prefect.
+
+    Args:
+        new_name: Novo nome para a execução do fluxo.
     """
 
     # Pega o contexto da execução atual para obter o ID
@@ -55,8 +63,29 @@ def generate_dump_db_schedules(
     runs_interval_minutes: int = 15,
     timezone: str = "America/Sao_Paulo",
 ) -> List[Interval]:
-    """
-    Generates multiple schedules for database dumping.
+    """Gera múltiplos schedules Prefect para dump de tabelas de banco de dados.
+
+    Cria schedules escalonados para evitar sobrecarga, com cada tabela
+    iniciando em horários diferentes.
+
+    Args:
+        interval: Intervalo entre execuções.
+        start_date: Data/hora de início do primeiro schedule.
+        db_database: Nome do banco de dados.
+        db_host: Host do banco de dados.
+        db_port: Porta do banco de dados.
+        db_type: Tipo do banco ("mysql", "sqlserver", "oracle", "postgres").
+        dataset_id: ID do dataset de destino.
+        infisical_secret_path: Caminho do secret com credenciais.
+        table_parameters: Lista de dicionários com parâmetros por tabela.
+        biglake_table: Se True, cria tabela BigLake.
+        db_charset: Charset do banco de dados.
+        batch_size: Tamanho do lote para extração.
+        runs_interval_minutes: Minutos entre início de cada schedule.
+        timezone: Timezone para os schedules.
+
+    Returns:
+        Lista de objetos Interval configurados.
     """
     other_parameters = {
         "retry_dump_upload_attempts": 1,
@@ -131,25 +160,25 @@ async def delete_flow_run_batch(
     states: list[str] | None = None,
     concurrency_limit: int = 20,
 ) -> int:
-    """
-    Busca até 'batch_size' execuções de fluxo que correspondam aos estados
-    e as deleta. Retorna o número de execuções realmente deletadas neste batch.
+    """Deleta execuções de fluxo Prefect em lote de forma assíncrona.
 
-    Possible states:
-        "Scheduled",
-        "Late",
-        "AwaitingRetry",
-        "Pending",
-        "Running",
-        "Retrying",
-        "Paused",
-        "Cancelling",
-        "Cancelled",
-        "Completed",
-        "Cached",
-        "RolledBack",
-        "Failed",
-        "Crashed"
+    Busca e deleta execuções de fluxo que correspondam aos filtros especificados,
+    processando em lotes para evitar sobrecarga da API.
+
+    Args:
+        number_of_runs: Número máximo de execuções a deletar.
+        flow_name: Nome do fluxo para filtrar (opcional).
+        deployment_name: Nome do deployment para filtrar (opcional).
+        states: Lista de estados para filtrar (ex: ["Failed", "Cancelled"]).
+        concurrency_limit: Número máximo de deleções simultâneas.
+
+    Returns:
+        Número total de execuções deletadas.
+
+    Note:
+        Estados possíveis: "Scheduled", "Late", "AwaitingRetry", "Pending",
+        "Running", "Retrying", "Paused", "Cancelling", "Cancelled",
+        "Completed", "Cached", "RolledBack", "Failed", "Crashed"
     """
     API_FETCH_LIMIT = 200
 
@@ -253,24 +282,21 @@ def create_schedules(
     timezone: str,
     slug_field: str = None,
 ):
-    """
-    Generates a full Prefect deployment YAML.
+    """Gera configuração YAML de schedules Prefect escalonados.
 
-        Args:
-            schedules_parameters (list): A list of dictionaries, each defining a table to dump.
-            deployment_name (str): The name for the Prefect deployment.
-            entrypoint (str): The entrypoint for the flow (e.g., 'path/to/flow.py:flow_name').
-            base_interval_seconds (int): The base interval for schedules.
-            base_anchor_date_str (str): The anchor date for the first schedule.
-            runs_interval_minutes (int): The number of minutes to wait between starting each schedule.
-            timezone (str): The IANA timezone for all schedules.
-            work_pool_name (str): The name of the work pool.
-            work_queue_name (str): The name of the work queue.
-            job_image (str): The Docker image for the job.
-            job_command (str): The command to execute the flow run.
+    Cria múltiplos schedules com horários de início defasados para evitar
+    execuções simultâneas.
 
-        Returns:
-            dict: A dictionary representing the complete Prefect deployment YAML.
+    Args:
+        schedules_parameters: Lista de dicionários com parâmetros por schedule.
+        base_interval_seconds: Intervalo base entre execuções em segundos.
+        base_anchor_date_str: Data/hora de início do primeiro schedule (ISO format).
+        runs_interval_minutes: Minutos de defasagem entre schedules.
+        timezone: Timezone IANA (ex: "America/Sao_Paulo").
+        slug_field: Campo dos parâmetros a usar como slug (opcional).
+
+    Returns:
+        String YAML com configuração de schedules.
     """
     base_anchor_date = datetime.fromisoformat(base_anchor_date_str)
     schedules = []
@@ -312,19 +338,23 @@ def create_dump_db_schedules(
     runs_interval_minutes: int,
     timezone: str,
 ):
-    """
-    Generates a full Prefect deployment YAML for database dump tasks.
+    """Gera YAML de schedules Prefect específico para dumps de banco de dados.
+
+    Processa queries SQL para linha única e cria schedules escalonados
+    por table_id.
 
     Args:
-        deployment_name (str): The name for the Prefect deployment.
-        entrypoint (str): The entrypoint for the flow (e.g., 'path/to/flow.py:flow_name').
-        table_parameters_list (list): A list of dictionaries, each defining a table to dump.
-        base_interval_seconds (int): The base interval for schedules.
-        base_anchor_date_str (str): The anchor date for the first schedule.
-        runs_interval_minutes (int): The number of minutes to wait between starting each schedule.
-        timezone (str): The IANA timezone for all schedules.
+        table_parameters_list: Lista de dicionários com parâmetros de tabelas.
+        base_interval_seconds: Intervalo base entre execuções em segundos.
+        base_anchor_date_str: Data/hora de início (ISO format).
+        runs_interval_minutes: Minutos de defasagem entre schedules.
+        timezone: Timezone IANA.
+
     Returns:
-        dict: A dictionary representing the complete Prefect deployment YAML.
+        String YAML com configuração de schedules.
+
+    Raises:
+        ValueError: Se algum parâmetro não contiver 'table_id'.
     """
     base_anchor_date = datetime.fromisoformat(base_anchor_date_str)
     schedules = []

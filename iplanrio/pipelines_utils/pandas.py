@@ -1,4 +1,10 @@
 # -*- coding: utf-8 -*-
+"""Utilitários para manipulação e transformação de DataFrames.
+
+Este módulo fornece funções para conversão, limpeza, particionamento e exportação
+de dados em diferentes formatos (CSV, Parquet), com suporte a tabelas particionadas
+no padrão Hive e tratamento de colunas.
+"""
 import re
 from datetime import datetime
 from os import walk
@@ -14,15 +20,26 @@ from iplanrio.pipelines_utils.logging import log
 
 
 def batch_to_dataframe(batch: List[List], columns: List[str]) -> pd.DataFrame:
-    """
-    Converts a batch of rows to a dataframe.
+    """Converte um lote de linhas em DataFrame.
+
+    Args:
+        batch: Lista de listas representando as linhas de dados.
+        columns: Lista com os nomes das colunas.
+
+    Returns:
+        DataFrame construído a partir do batch e colunas fornecidos.
     """
     return pd.DataFrame(data=batch, columns=columns)
 
 
 def build_query_new_columns(table_columns: List[str]) -> str:
-    """ "
-    Creates the query without accents.
+    """Cria cláusulas SELECT com aliases de colunas sem acentos.
+
+    Args:
+        table_columns: Lista com os nomes originais das colunas.
+
+    Returns:
+        String com cláusulas "coluna_original AS coluna_sem_acento" separadas por quebra de linha.
     """
     new_cols = remove_columns_accents(pd.DataFrame(columns=table_columns))
     return "\n".join(
@@ -34,8 +51,20 @@ def build_query_new_columns(table_columns: List[str]) -> str:
 
 
 def clean_dataframe(dataframe: pd.DataFrame) -> pd.DataFrame:
-    """
-    Cleans a dataframe.
+    """Limpa caracteres indesejados em colunas de texto do DataFrame.
+
+    Remove caracteres nulos, substitui quebras de linha e converte "None" para NaN
+    em todas as colunas do tipo object.
+
+    Args:
+        dataframe: DataFrame a ser limpo.
+
+    Returns:
+        DataFrame com colunas de texto limpas.
+
+    Raises:
+        Exception: Se houver erro ao processar alguma coluna, exibe informações
+            detalhadas e repropaga a exceção.
     """
     for col in dataframe.columns.tolist():
         try:
@@ -62,8 +91,20 @@ def clean_dataframe(dataframe: pd.DataFrame) -> pd.DataFrame:
 
 
 def dump_header_to_file(data_path: Union[str, Path], data_type: str = "csv"):
-    """
-    Writes a header to a CSV file.
+    """Extrai e salva apenas o cabeçalho de um arquivo de dados.
+
+    Busca o primeiro arquivo do tipo especificado, lê apenas a primeira linha
+    e salva em um diretório temporário, preservando a estrutura de particionamento.
+
+    Args:
+        data_path: Caminho do diretório ou arquivo de dados.
+        data_type: Tipo do arquivo ("csv" ou "parquet").
+
+    Returns:
+        Caminho do diretório onde o arquivo de cabeçalho foi salvo.
+
+    Raises:
+        ValueError: Se data_type não for "csv" ou "parquet".
     """
     try:
         assert data_type in ["csv", "parquet"]
@@ -116,9 +157,16 @@ def dump_header_to_file(data_path: Union[str, Path], data_type: str = "csv"):
 
 
 def final_column_treatment(column: str) -> str:
-    """
-    Adds an underline before column name if it only has numbers or remove all non alpha numeric
-    characters besides underlines ("_").
+    """Aplica tratamento final no nome da coluna para garantir validade.
+
+    Adiciona underscore antes do nome se for composto apenas por números,
+    ou remove todos os caracteres não alfanuméricos exceto underscores.
+
+    Args:
+        column: Nome da coluna a ser tratado.
+
+    Returns:
+        Nome da coluna tratado.
     """
     try:
         int(column)
@@ -153,8 +201,20 @@ def add_ingestion_timestamp(dataframe: pd.DataFrame) -> pd.DataFrame:
 def parse_date_columns(
     dataframe: pd.DataFrame, partition_date_column: str
 ) -> Tuple[pd.DataFrame, List[str]]:
-    """
-    Parses the date columns to the partition format.
+    """Extrai colunas de particionamento temporal a partir de uma coluna de data.
+
+    Cria as colunas ano_particao, mes_particao e data_particao a partir
+    da coluna de data especificada.
+
+    Args:
+        dataframe: DataFrame contendo os dados.
+        partition_date_column: Nome da coluna que contém as datas.
+
+    Returns:
+        Tupla contendo o DataFrame modificado e lista com os nomes das colunas criadas.
+
+    Raises:
+        ValueError: Se alguma das colunas de partição já existir no DataFrame.
     """
     ano_col = "ano_particao"
     mes_col = "mes_particao"
@@ -191,8 +251,16 @@ def parse_date_columns(
 
 
 def remove_columns_accents(dataframe: pd.DataFrame) -> list:
-    """
-    Remove accents from dataframe columns.
+    """Remove acentos e normaliza nomes das colunas do DataFrame.
+
+    Converte para minúsculas, remove acentos, substitui espaços e caracteres
+    especiais por underscores, e aplica tratamento final.
+
+    Args:
+        dataframe: DataFrame cujos nomes de colunas serão normalizados.
+
+    Returns:
+        Lista com os nomes das colunas normalizados.
     """
     columns = [str(column) for column in dataframe.columns]
     dataframe.columns = columns
@@ -225,15 +293,27 @@ def to_json_dataframe(
     read_csv_kwargs: dict = None,
     save_to: Union[str, Path] = None,
 ) -> "pd.DataFrame":
-    """
-    Manipulates a dataframe by keeping key_column and moving every other column
-    data to a "content" column in JSON format. Example:
+    """Transforma DataFrame movendo colunas para formato JSON em coluna 'content'.
 
-    - Input dataframe: pd.DataFrame({"key": ["a", "b", "c"], "col1": [1, 2, 3], "col2": [4, 5, 6]})
-    - Output dataframe: pd.DataFrame({
-        "key": ["a", "b", "c"],
-        "content": [{"col1": 1, "col2": 4}, {"col1": 2, "col2": 5}, {"col1": 3, "col2": 6}]
-    })
+    Mantém a key_column e agrupa todas as outras colunas em um dicionário
+    na coluna 'content'.
+
+    Args:
+        dataframe: DataFrame a ser transformado (opcional se csv_path fornecido).
+        csv_path: Caminho para arquivo CSV (alternativa ao dataframe).
+        key_column: Nome da coluna chave a ser preservada.
+        read_csv_kwargs: Argumentos adicionais para pd.read_csv.
+        save_to: Caminho para salvar o resultado em CSV.
+
+    Returns:
+        DataFrame com estrutura [key_column, content] ou apenas [content].
+
+    Raises:
+        ValueError: Se nem dataframe nem csv_path forem fornecidos.
+
+    Example:
+        Input: pd.DataFrame({"key": ["a", "b"], "col1": [1, 2], "col2": [3, 4]})
+        Output: pd.DataFrame({"key": ["a", "b"], "content": [{"col1": 1, "col2": 3}, ...]})
     """
     if dataframe is None and not csv_path:
         raise ValueError("dataframe or dataframe_path is required")
@@ -262,8 +342,19 @@ def handle_dataframe_chunk(
     build_json_dataframe: bool = False,
     dataframe_key_column: str = None,
 ):
-    """
-    Handles a chunk of dataframe.
+    """Processa e salva um chunk de DataFrame com particionamento opcional.
+
+    Remove acentos das colunas, limpa dados, e salva em partições Hive ou
+    arquivo único dependendo da configuração.
+
+    Args:
+        dataframe: DataFrame a ser processado.
+        save_path: Caminho onde os dados serão salvos.
+        partition_columns: Lista de colunas para particionamento.
+        event_id: Identificador do evento para nomeação de arquivos.
+        idx: Índice do chunk (usado para logging e nomeação).
+        build_json_dataframe: Se True, converte dados para formato JSON.
+        dataframe_key_column: Coluna chave para conversão JSON.
     """
     if not partition_columns or partition_columns[0] == "":
         partition_column = None
@@ -321,23 +412,31 @@ def to_partitions(
     build_json_dataframe: bool = False,
     dataframe_key_column: str = None,
 ) -> List[Path]:  # sourcery skip: raise-specific-error
-    """Save data in to hive patitions schema, given a dataframe and a list of partition columns.
+    """Salva DataFrame em partições no formato Hive.
+
+    Cria estrutura de diretórios no padrão partition=value e salva os dados
+    particionados, removendo as colunas de partição dos arquivos.
+
     Args:
-        data (pandas.core.frame.DataFrame): Dataframe to be partitioned.
-        partition_columns (list): List of columns to be used as partitions.
-        savepath (str, pathlib.PosixPath): folder path to save the partitions
-    Exemple:
-        data = {
-            "ano": [2020, 2021, 2020, 2021, 2020, 2021, 2021,2025],
-            "mes": [1, 2, 3, 4, 5, 6, 6,9],
-            "sigla_uf": ["SP", "SP", "RJ", "RJ", "PR", "PR", "PR","PR"],
-            "dado": ["a", "b", "c", "d", "e", "f", "g",'h'],
-        }
-        to_partitions(
-            data=pd.DataFrame(data),
-            partition_columns=['ano','mes','sigla_uf'],
-            savepath='partitions/'
-        )
+        data: DataFrame a ser particionado.
+        partition_columns: Lista de colunas usadas para particionamento.
+        savepath: Caminho base onde as partições serão salvas.
+        data_type: Formato do arquivo ("csv" ou "parquet").
+        suffix: Sufixo adicional para o nome do arquivo.
+        build_json_dataframe: Se True, converte dados para formato JSON.
+        dataframe_key_column: Coluna chave para conversão JSON.
+
+    Returns:
+        Lista de caminhos dos arquivos salvos.
+
+    Raises:
+        ValueError: Se data_type não for "csv" ou "parquet".
+        BaseException: Se data não for um pandas DataFrame.
+
+    Example:
+        data = {"ano": [2020, 2021], "mes": [1, 2], "valor": [10, 20]}
+        to_partitions(pd.DataFrame(data), ['ano', 'mes'], 'output/')
+        # Cria: output/ano=2020/mes=1/data.csv e output/ano=2021/mes=2/data.csv
     """
     saved_files = []
     if isinstance(data, (pd.core.frame.DataFrame)):
@@ -406,8 +505,16 @@ def dataframe_to_csv(
     build_json_dataframe: bool = False,
     dataframe_key_column: str = None,
 ) -> None:
-    """
-    Writes a dataframe to CSV file.
+    """Salva DataFrame em arquivo CSV.
+
+    Cria diretórios necessários e salva o DataFrame em CSV com encoding UTF-8,
+    com opção de conversão para formato JSON.
+
+    Args:
+        dataframe: DataFrame a ser salvo.
+        filepath: Caminho completo do arquivo de destino.
+        build_json_dataframe: Se True, converte para formato JSON antes de salvar.
+        dataframe_key_column: Coluna chave para conversão JSON.
     """
     if build_json_dataframe:
         dataframe = to_json_dataframe(dataframe, key_column=dataframe_key_column)
@@ -427,8 +534,19 @@ def dataframe_to_parquet(
     build_json_dataframe: bool = False,
     dataframe_key_column: str = None,
 ):
-    """
-    Writes a dataframe to Parquet file with Schema as STRING.
+    """Salva DataFrame em arquivo Parquet com merge incremental.
+
+    Se o arquivo já existir, carrega e concatena com os novos dados antes de salvar.
+    Usa engine PyArrow para escrita.
+
+    Args:
+        dataframe: DataFrame a ser salvo.
+        path: Caminho completo do arquivo de destino.
+        build_json_dataframe: Se True, converte para formato JSON antes de salvar.
+        dataframe_key_column: Coluna chave para conversão JSON.
+
+    Note:
+        Adaptado de https://stackoverflow.com/a/70817689/9944075
     """
     # Code adapted from
     # https://stackoverflow.com/a/70817689/9944075

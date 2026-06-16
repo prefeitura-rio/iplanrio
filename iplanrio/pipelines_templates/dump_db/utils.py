@@ -47,13 +47,25 @@ from iplanrio.pipelines_utils.pandas import (
 
 def parse_comma_separated_string_to_list(text: Optional[str]) -> List[str]:
     """
-    Parses a comma separated string to a list.
+    Converte string separada por vírgulas em lista de strings limpa.
+
+    Remove caracteres especiais (newlines, tabs, carriage returns), vírgulas duplicadas
+    e strings vazias. Útil para parsing de parâmetros de configuração.
 
     Args:
-        text: The text to parse.
+        text: String com valores separados por vírgula. Pode ser None.
 
     Returns:
-        A list of strings.
+        Lista de strings sem espaços extras e sem valores vazios.
+        Retorna lista vazia se text for None ou vazio.
+
+    Examples:
+        >>> parse_comma_separated_string_to_list("col1, col2,  col3")
+        ['col1', 'col2', 'col3']
+        >>> parse_comma_separated_string_to_list("data_particao,,")
+        ['data_particao']
+        >>> parse_comma_separated_string_to_list(None)
+        []
     """
     if text is None or not text:
         return []
@@ -80,18 +92,36 @@ def database_get_db(
     charset: str = NOT_SET,
 ) -> Database:
     """
-    Returns a database object.
+    Factory para criação de objetos de conexão com banco de dados.
+
+    Retorna instância apropriada da classe Database baseada no tipo especificado.
+    Suporta MySQL, Oracle, PostgreSQL e SQL Server.
 
     Args:
-        database_type: The type of the database.
-        hostname: The hostname of the database.
-        port: The port of the database.
-        user: The username of the database.
-        password: The password of the database.
-        database: The database name.
+        database_type: Tipo do banco - 'mysql', 'oracle', 'postgres' ou 'sql_server'.
+        hostname: Endereço do servidor (ex: 'localhost', '192.168.1.100').
+        port: Porta de conexão (ex: 3306 para MySQL, 1521 para Oracle).
+        user: Nome de usuário para autenticação.
+        password: Senha para autenticação.
+        database: Nome do banco de dados/schema.
+        charset: Charset da conexão (opcional). Se NOT_SET, usa charset padrão.
 
     Returns:
-        A database object.
+        Instância de Database específica para o tipo solicitado
+        (MySql, Oracle, Postgres ou SqlServer).
+
+    Raises:
+        ValueError: Se database_type não for um dos tipos suportados.
+
+    Examples:
+        >>> db = database_get_db(
+        ...     database_type='mysql',
+        ...     hostname='db.example.com',
+        ...     port=3306,
+        ...     user='etl_user',
+        ...     password='secret',
+        ...     database='production'
+        ... )
     """
 
     DATABASE_MAPPING: Dict[str, type[Database]] = {
@@ -118,11 +148,22 @@ def database_execute(
     query: str,
 ) -> None:
     """
-    Executes a query on the database.
+    Executa query SQL no banco de dados após limpeza.
+
+    Remove tabs e executa a query no objeto de banco fornecido. Registra a query
+    executada nos logs para rastreabilidade.
 
     Args:
-        database: The database object.
-        query: The query to execute.
+        database: Objeto Database já conectado (MySql, Oracle, Postgres ou SqlServer).
+        query: Query SQL a ser executada. Tabs serão removidos automaticamente.
+
+    Note:
+        Esta função apenas executa a query, não retorna resultados.
+        Para buscar dados, use database.fetch_batch() após a execução.
+
+    Examples:
+        >>> db = database_get_db('mysql', 'localhost', 3306, 'user', 'pass', 'db')
+        >>> database_execute(db, 'SELECT * FROM users WHERE created_at > "2024-01-01"')
     """
     # log(f"Query parsed: {query}")
     query = remove_tabs_from_query(query)
@@ -156,6 +197,38 @@ def _process_single_query(
     only_staging_dataset: bool = False,
     add_timestamp_column: bool = False,
 ) -> Tuple[Set[str], bool, int, int]:
+    """
+    Processa uma única query, extrai dados em lotes e faz upload para BigQuery.
+
+    Conecta ao banco de dados, executa a query, processa os dados em batches,
+    aplica transformações (remoção de acentos, particionamento) e envia para GCS/BigQuery.
+
+    Args:
+        database_type: Tipo do banco ('mysql', 'oracle', 'postgres', 'sql_server').
+        hostname: Endereço do servidor do banco.
+        port: Porta de conexão.
+        user: Usuário do banco.
+        password: Senha do banco.
+        database: Nome do banco de dados.
+        charset: Charset da conexão.
+        query: Query SQL a ser executada.
+        batch_size: Número de registros por lote.
+        dataset_id: ID do dataset no BigQuery.
+        table_id: ID da tabela no BigQuery.
+        dump_mode: Modo de escrita ('append' ou 'overwrite').
+        partition_columns: Colunas usadas para particionamento.
+        batch_data_type: Formato dos arquivos ('csv' ou 'parquet').
+        biglake_table: Se True, cria tabela BigLake.
+        log_number_of_batches: Intervalo de batches para logging.
+        cleared_partitions: Set de partições já limpas (acumulador).
+        cleared_table: Flag indicando se a tabela foi limpa.
+        log_prefix: Prefixo para mensagens de log.
+        only_staging_dataset: Se True, remove dataset de produção.
+        add_timestamp_column: Se True, adiciona coluna de timestamp de ingestão.
+
+    Returns:
+        Tupla com (partições limpas, flag de tabela limpa, número de batches, total de linhas).
+    """
     # Keep track of cleared stuff
     prepath = f"data/{uuid4()}/"
     db_object = database_get_db(
@@ -522,8 +595,36 @@ def dump_upload_batch(
     add_timestamp_column: bool = False
 ):
     """
-    Ponto de entrada síncrono que, internamente, cria um loop de eventos asyncio
-    para executar múltiplas queries concorrentemente com um semáforo.
+    Executa múltiplas queries em paralelo com controle de concorrência e retry automático.
+
+    Orquestra a extração de dados de bancos relacionais para BigQuery, processando
+    múltiplas queries concorrentemente com semáforo para controle de paralelismo
+    e retry automático em caso de falhas.
+
+    Args:
+        database_type: Tipo do banco ('mysql', 'oracle', 'postgres', 'sql_server').
+        hostname: Endereço do servidor do banco.
+        port: Porta de conexão.
+        user: Usuário do banco.
+        password: Senha do banco.
+        database: Nome do banco de dados.
+        queries: Lista de dicts com 'query', 'start_date' e 'end_date'.
+        batch_size: Número de registros por lote.
+        dataset_id: ID do dataset no BigQuery.
+        table_id: ID da tabela no BigQuery.
+        dump_mode: Modo de escrita ('append' ou 'overwrite').
+        charset: Charset da conexão (default: NOT_SET).
+        partition_columns: Lista de colunas para particionamento (default: []).
+        batch_data_type: Formato dos arquivos - 'csv' ou 'parquet' (default: 'csv').
+        biglake_table: Se True, cria tabela BigLake (default: True).
+        log_number_of_batches: Intervalo de batches para logging (default: 100).
+        retry_dump_upload_attempts: Número de tentativas em caso de falha (default: 3).
+        max_concurrency: Número máximo de queries simultâneas (default: 1).
+        only_staging_dataset: Se True, remove dataset de produção (default: False).
+        add_timestamp_column: Se True, adiciona timestamp de ingestão (default: False).
+
+    Raises:
+        RuntimeError: Se alguma query falhar após todas as tentativas de retry.
     """
     bd_version = bd.__version__
     log(f"Using basedosdados@{bd_version}")
@@ -678,7 +779,28 @@ def format_partitioned_query(
     offset: Optional[int] = 1
 ) -> List[dict]:
     """
-    Formats a query for fetching partitioned data.
+    Formata query para extração incremental baseada em partições de data.
+
+    Analisa a última partição disponível no BigQuery e gera queries com filtros
+    de data para extrair apenas dados novos. Opcionalmente, quebra o período em
+    chunks menores (dia, mês, ano, etc) para evitar timeouts.
+
+    Args:
+        query: Query SQL base a ser formatada.
+        dataset_id: ID do dataset no BigQuery.
+        table_id: ID da tabela no BigQuery.
+        database_type: Tipo do banco ('mysql', 'oracle', 'postgres', 'sql_server').
+        partition_columns: Lista de colunas de particionamento (primeira deve ser data).
+        lower_bound_date: Data mínima ou alias ('current_day', 'previous_month', etc).
+        date_format: Formato da data (ex: '%Y-%m-%d').
+        break_query_start: Data inicial para quebra em chunks.
+        break_query_end: Data final para quebra em chunks.
+        break_query_frequency: Frequência dos chunks ('day', 'week', 'month', 'year', etc).
+        wait: Parâmetro não utilizado (compatibilidade).
+        offset: Dias/meses de offset para datas relativas (default: 1).
+
+    Returns:
+        Lista de dicts com 'query', 'start_date' e 'end_date' para cada chunk.
     """
     if not partition_columns or partition_columns[0] == "":
         log("NO partition column specified. Returning query as is")
@@ -727,6 +849,27 @@ def format_partitioned_query(
 def get_last_partition_date(
     dataset_id: str, table_id: str, date_format: Optional[str]
 ) -> Optional[str]:
+    """
+    Obtém a data da última partição disponível no GCS para a tabela.
+
+    Lista blobs do Google Cloud Storage e extrai a data mais recente das partições
+    existentes. Usado para determinar ponto de partida em dumps incrementais.
+
+    Args:
+        dataset_id: ID do dataset no BigQuery (ex: 'rj_segovi').
+        table_id: ID da tabela no BigQuery (ex: 'ocorrencias').
+        date_format: Formato da data para parsing (ex: '%Y-%m-%d').
+
+    Returns:
+        Data da última partição formatada (ex: '2024-06-15') ou None se a tabela
+        ainda não possui partições no storage.
+
+    Examples:
+        >>> get_last_partition_date('rj_segovi', 'ocorrencias', '%Y-%m-%d')
+        '2024-06-15'
+        >>> get_last_partition_date('new_dataset', 'new_table', '%Y-%m-%d')
+        None
+    """
     blobs = get_storage_blobs(dataset_id=dataset_id, table_id=table_id)
     storage_partitions_dict = parse_blobs_to_partition_dict(blobs=blobs)
     return extract_last_partition_date(
@@ -737,6 +880,35 @@ def get_last_partition_date(
 def get_last_date(
     lower_bound_date: Optional[str], date_format: str, last_partition_date: str, offset: Optional[int] = 1
 ) -> str:
+    """
+    Calcula a data de início para extração baseada em aliases ou data literal.
+
+    Suporta aliases relativos ('current_day', 'previous_month', etc) e datas literais.
+    Usa timezone de São Paulo para cálculos de datas atuais. Se uma data literal for
+    fornecida junto com última partição, retorna a menor entre as duas.
+
+    Args:
+        lower_bound_date: Data literal ('2024-01-01') ou alias:
+            - 'current_year': Primeiro dia do ano atual
+            - 'current_month': Primeiro dia do mês atual
+            - 'previous_month': Primeiro dia do mês anterior (offset controla quantos meses)
+            - 'current_day': Data atual
+            - 'previous_day': Data anterior (offset controla quantos dias)
+        date_format: Formato de saída da data (ex: '%Y-%m-%d', '%Y%m%d').
+        last_partition_date: Data da última partição existente (usada como fallback).
+        offset: Número de dias/meses para aliases 'previous_*' (default: 1).
+
+    Returns:
+        Data formatada como string no formato especificado.
+
+    Examples:
+        >>> get_last_date('current_day', '%Y-%m-%d', '2024-01-01')
+        '2026-06-16'
+        >>> get_last_date('previous_month', '%Y-%m-%d', '2024-01-01', offset=1)
+        '2026-05-01'
+        >>> get_last_date('2024-01-15', '%Y-%m-%d', '2024-01-20')
+        '2024-01-15'
+    """
     brazil_timezone = pytz.timezone("America/Sao_Paulo")
     now: datetime = datetime.now(brazil_timezone)
     if lower_bound_date == "current_year":
@@ -771,6 +943,24 @@ def build_single_partition_query(
     database_type: str,
     offset: Optional[int]
 ) -> dict:
+    """
+    Constrói uma query com filtro de partição para extração incremental.
+
+    Adiciona WHERE clause na query base para extrair apenas registros
+    posteriores à última partição existente.
+
+    Args:
+        query: Query SQL base.
+        partition_column: Nome da coluna de data para filtro.
+        lower_bound_date: Data mínima ou alias.
+        last_partition_date: Data da última partição existente.
+        date_format: Formato da data.
+        database_type: Tipo do banco para sintaxe específica.
+        offset: Offset para datas relativas.
+
+    Returns:
+        Dict com 'query', 'start_date' e 'end_date'.
+    """
     last_date = get_last_date(
         lower_bound_date=lower_bound_date,
         date_format=date_format,
@@ -823,6 +1013,28 @@ def build_chunked_queries(
     last_partition_date: str,
     offset: Optional[int]
 ) -> List[dict]:
+    """
+    Quebra query em múltiplos chunks temporais para processamento paralelo.
+
+    Divide o intervalo de datas em períodos menores (dia, semana, mês, etc) para
+    evitar timeouts e permitir paralelização da extração.
+
+    Args:
+        query: Query SQL base.
+        partition_column: Coluna de data para filtro.
+        date_format: Formato da data.
+        database_type: Tipo do banco.
+        break_query_start: Data inicial do período total.
+        break_query_end: Data final do período total.
+        break_query_frequency: Frequência dos chunks ('day', 'week', 'month', 'year',
+            'bimester', 'trimester', 'quadrimester', 'semester').
+        lower_bound_date: Data mínima ou alias.
+        last_partition_date: Data da última partição.
+        offset: Offset para datas relativas.
+
+    Returns:
+        Lista de dicts com 'query', 'start_date' e 'end_date' para cada chunk.
+    """
     start_date_str = get_last_date(
         lower_bound_date=break_query_start,
         date_format=date_format,
@@ -880,6 +1092,20 @@ def build_chunked_queries(
 def calculate_end_date(
     current_start: datetime, end_date: datetime, break_query_frequency: Optional[str]
 ) -> datetime:
+    """
+    Calcula a data final de um chunk baseada na frequência especificada.
+
+    Args:
+        current_start: Data inicial do chunk.
+        end_date: Data limite máxima.
+        break_query_frequency: Frequência ('day', 'week', 'month', 'year', etc).
+
+    Returns:
+        Data final do chunk (min entre o calculado e end_date).
+
+    Raises:
+        ValueError: Se break_query_frequency for inválida.
+    """
     if break_query_frequency.lower() == "month":
         return min(get_last_day_of_month(date=current_start), end_date)
     elif break_query_frequency.lower() == "year":
@@ -922,6 +1148,23 @@ def build_chunk_query(
     current_start: datetime,
     current_end: datetime,
 ) -> dict:
+    """
+    Constrói query com filtro de intervalo de datas para um chunk específico.
+
+    Args:
+        query: Query SQL base.
+        partition_column: Coluna de data para filtro.
+        date_format: Formato da data.
+        database_type: Tipo do banco para sintaxe específica.
+        current_start: Data inicial do chunk.
+        current_end: Data final do chunk.
+
+    Returns:
+        Dict com 'query', 'start_date' e 'end_date'.
+
+    Raises:
+        ValueError: Se database_type for inválido.
+    """
     aux_name = f"a{uuid4().hex}"[:8]
 
     if database_type == "oracle":
@@ -967,6 +1210,29 @@ def build_chunk_query(
 def get_next_start_date(
     current_start: datetime, break_query_frequency: Optional[str]
 ) -> datetime:
+    """
+    Calcula a data inicial do próximo chunk baseada na frequência.
+
+    Avança a data de início pelo intervalo especificado na frequência. Usado para
+    gerar sequência de chunks temporais em processamento paralelo.
+
+    Args:
+        current_start: Data inicial do chunk atual.
+        break_query_frequency: Frequência dos chunks - 'day', 'week', 'month', 'year',
+            'bimester' (2 meses), 'trimester' (3 meses), 'quadrimester' (4 meses)
+            ou 'semester' (6 meses).
+
+    Returns:
+        Data inicial do próximo chunk.
+
+    Examples:
+        >>> get_next_start_date(datetime(2024, 1, 1), 'month')
+        datetime.datetime(2024, 2, 1, 0, 0)
+        >>> get_next_start_date(datetime(2024, 1, 1), 'week')
+        datetime.datetime(2024, 1, 8, 0, 0)
+        >>> get_next_start_date(datetime(2024, 1, 1), 'trimester')
+        datetime.datetime(2024, 4, 1, 0, 0)
+    """
     if break_query_frequency.lower() == "month":
         return add_months(start_date=current_start, months=1)
     elif break_query_frequency.lower() == "year":
@@ -995,15 +1261,67 @@ def get_next_start_date(
 
 
 def get_last_day_of_month(date: datetime) -> datetime:
+    """
+    Retorna o último dia do mês da data fornecida.
+
+    Calcula dinamicamente o último dia do mês, considerando meses com
+    diferentes quantidades de dias e anos bissextos.
+
+    Args:
+        date: Data de referência.
+
+    Returns:
+        Datetime do último dia do mês às 00:00:00.
+
+    Examples:
+        >>> get_last_day_of_month(datetime(2024, 2, 15))
+        datetime.datetime(2024, 2, 29, 0, 0)  # ano bissexto
+        >>> get_last_day_of_month(datetime(2024, 4, 1))
+        datetime.datetime(2024, 4, 30, 0, 0)
+    """
     next_month = date.replace(day=28) + timedelta(days=4)
     return next_month - timedelta(days=next_month.day)
 
 
 def get_last_day_of_year(year: int) -> datetime:
+    """
+    Retorna o último dia do ano especificado (31 de dezembro).
+
+    Args:
+        year: Ano de referência (ex: 2024).
+
+    Returns:
+        Datetime de 31 de dezembro do ano especificado às 00:00:00.
+
+    Examples:
+        >>> get_last_day_of_year(2024)
+        datetime.datetime(2024, 12, 31, 0, 0)
+    """
     return datetime(year, 12, 31)
 
 
 def add_months(start_date: datetime, months: int) -> datetime:
+    """
+    Adiciona meses a uma data mantendo o dia.
+
+    Manipula corretamente overflow de ano ao adicionar meses. Mantém o mesmo
+    dia do mês (exceto quando não existe no mês destino).
+
+    Args:
+        start_date: Data inicial.
+        months: Número de meses a adicionar (pode ser negativo para subtrair).
+
+    Returns:
+        Nova data com os meses adicionados, mantendo o dia original.
+
+    Examples:
+        >>> add_months(datetime(2024, 1, 15), 2)
+        datetime.datetime(2024, 3, 15, 0, 0)
+        >>> add_months(datetime(2024, 11, 15), 3)
+        datetime.datetime(2025, 2, 15, 0, 0)
+        >>> add_months(datetime(2024, 6, 15), -2)
+        datetime.datetime(2024, 4, 15, 0, 0)
+    """
     new_month = start_date.month + months
     year_increment = (new_month - 1) // 12
     new_month = (new_month - 1) % 12 + 1
