@@ -2,6 +2,7 @@ name: SAST
 
 on:
   push:
+    branches: [master]
 
 permissions: {}
 
