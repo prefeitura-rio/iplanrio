@@ -519,7 +519,7 @@ def dump_upload_batch(
     retry_dump_upload_attempts: int = 3,
     max_concurrency: int = 1,  # Novo parâmetro para definir o limite do semáforo
     only_staging_dataset: bool = False,
-    add_timestamp_column: bool = False
+    add_timestamp_column: bool = False,
 ):
     """
     Ponto de entrada síncrono que, internamente, cria um loop de eventos asyncio
@@ -605,7 +605,7 @@ def dump_upload_batch(
                 "cleared_partitions": initial_cleared_partitions,
                 "cleared_table": initial_cleared_table,
                 "only_staging_dataset": only_staging_dataset,
-                "add_timestamp_column": add_timestamp_column
+                "add_timestamp_column": add_timestamp_column,
             }
             # Cria a tarefa com o wrapper de retry
             task = _run_query_with_retries(

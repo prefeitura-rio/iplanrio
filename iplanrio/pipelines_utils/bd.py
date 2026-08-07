@@ -298,9 +298,7 @@ def get_base64_bd_config(projec_id: str) -> str:
 
                 [api]
                 url = "https://api.dados.rio/api/v1/graphql"
-            """.replace(
-        "                ", ""
-    )
+            """.replace("                ", "")
 
     string_bytes = string.encode("utf-8")
 
