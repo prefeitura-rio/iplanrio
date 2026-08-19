@@ -790,10 +790,14 @@ def build_single_partition_query(
         select * from {aux_name}
         where {partition_column} >= TO_DATE('{last_date}', '{oracle_date_format}')
         """
+    
+    
     elif database_type == "mysql":
-        query = f"""
-        select * from ({query}) as subquery
-        where DATE({partition_column}) >= '{last_date}'
+        # Check if query already contains WHERE clause
+        has_where = " where " in query.lower()
+        where_connector = "and" if has_where else "where"
+        query = f"""{query}
+        {where_connector} DATE({partition_column}) >= '{last_date}'
         """
     elif database_type in ["postgres", "sql_server"]:
         query = f"""
@@ -942,9 +946,11 @@ def build_chunk_query(
             and CONVERT(DATE, CAST({partition_column} AS VARCHAR)) <= '{current_end .strftime(date_format)}'
         """
     elif database_type == "mysql":
-        query = f"""
-        select * from ({query}) as subquery
-        where DATE({partition_column}) >= '{current_start.strftime(date_format)}'
+        # Check if query already contains WHERE clause
+        has_where = " where " in query.lower()
+        where_connector = "and" if has_where else "where"
+        query = f"""{query}
+        {where_connector} DATE({partition_column}) >= '{current_start.strftime(date_format)}'
             and DATE({partition_column}) <= '{current_end .strftime(date_format)}'
         """
     elif database_type == "postgres":
