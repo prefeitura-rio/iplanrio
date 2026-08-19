@@ -949,9 +949,22 @@ def build_chunk_query(
         # Check if query already contains WHERE clause
         has_where = " where " in query.lower()
         where_connector = "and" if has_where else "where"
+        
+        # Detect if partition_column is a year column
+        is_year_column = any(keyword in partition_column.lower() for keyword in ["ano", "year"])
+        
+        # Format the date appropriately
+        if is_year_column:
+            start_value = current_start.strftime(date_format)
+            end_value = current_end.strftime(date_format)
+        else:
+            # For date columns, use DATE function
+            start_value = f"DATE('{current_start.strftime(date_format)}')"
+            end_value = f"DATE('{current_end.strftime(date_format)}')"
+        
         query = f"""{query}
-        {where_connector} DATE({partition_column}) >= '{current_start.strftime(date_format)}'
-            and DATE({partition_column}) <= '{current_end .strftime(date_format)}'
+        {where_connector} {partition_column} >= {start_value}
+            and {partition_column} <= {end_value}
         """
     elif database_type == "postgres":
         query = f"""
