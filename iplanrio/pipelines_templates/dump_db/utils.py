@@ -778,6 +778,7 @@ def build_single_partition_query(
         offset=offset
     )
     aux_name = f"a{uuid4().hex}"[:8]
+    is_year_only = date_format == "%Y"
 
     log(
         f"Partitioned DETECTED: {partition_column}, returning a NEW QUERY with partitioned columns and filters"  # noqa
@@ -792,8 +793,8 @@ def build_single_partition_query(
         """
     elif database_type == "mysql":
         query = f"""
-        select * from ({query}) as subquery
-        where DATE({partition_column}) >= '{last_date}'
+        {query}
+        where {partition_column} >= '{last_date}'
         """
     elif database_type in ["postgres", "sql_server"]:
         query = f"""
@@ -923,6 +924,17 @@ def build_chunk_query(
     current_end: datetime,
 ) -> dict:
     aux_name = f"a{uuid4().hex}"[:8]
+    is_year_only = date_format == "%Y"
+    
+    # Extract start and end values
+    if is_year_only:
+        # For year-only format, extract the year as integer/string directly
+        start_value = str(current_start.year)
+        end_value = str(current_end.year)
+    else:
+        # For date formats, use strftime
+        start_value = current_start.strftime(date_format)
+        end_value = current_end.strftime(date_format)
 
     if database_type == "oracle":
         oracle_date_format: str = (
@@ -931,36 +943,36 @@ def build_chunk_query(
         query = f"""
         with {aux_name} as ({query})
         select * from {aux_name}
-        where {partition_column} >= TO_DATE('{current_start.strftime(date_format)}', '{oracle_date_format}')
-            and {partition_column} <= TO_DATE('{current_end.strftime(date_format)}', '{oracle_date_format}')
+        where {partition_column} >= TO_DATE('{start_value}', '{oracle_date_format}')
+            and {partition_column} <= TO_DATE('{end_value}', '{oracle_date_format}')
         """
     elif database_type == "sql_server":
         query = f"""
         with {aux_name} as ({query})
         select * from {aux_name}
-        where CONVERT(DATE, CAST({partition_column} AS VARCHAR)) >= '{current_start.strftime(date_format)}'
-            and CONVERT(DATE, CAST({partition_column} AS VARCHAR)) <= '{current_end .strftime(date_format)}'
+        where CONVERT(DATE, CAST({partition_column} AS VARCHAR)) >= '{start_value}'
+            and CONVERT(DATE, CAST({partition_column} AS VARCHAR)) <= '{end_value}'
         """
     elif database_type == "mysql":
         query = f"""
-        select * from ({query}) as subquery
-        where DATE({partition_column}) >= '{current_start.strftime(date_format)}'
-            and DATE({partition_column}) <= '{current_end .strftime(date_format)}'
+        {query}
+        where {partition_column} >= '{start_value}'
+            and {partition_column} <= '{end_value}'
         """
     elif database_type == "postgres":
         query = f"""
         with {aux_name} as ({query})
         select * from {aux_name}
-        where CONVERT(DATE, {partition_column}) >= '{current_start.strftime(date_format)}'
-            and CONVERT(DATE, {partition_column}) <= '{current_end .strftime(date_format)}'
+        where CONVERT(DATE, {partition_column}) >= '{start_value}'
+            and CONVERT(DATE, {partition_column}) <= '{end_value}'
         """
     else:
         raise ValueError(f"Unsupported database type: {database_type}")
 
     return {
         "query": query,
-        "start_date": current_start.strftime(date_format),
-        "end_date": current_end.strftime(date_format),
+        "start_date": start_value,
+        "end_date": end_value,
     }
 
 
