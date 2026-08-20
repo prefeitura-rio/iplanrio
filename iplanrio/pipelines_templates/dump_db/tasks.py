@@ -16,6 +16,15 @@ from iplanrio.pipelines_utils.env import (
 
 @task
 def get_database_username_and_password_from_secret_task(infisical_secret_path: str):
+    """
+    Obtém credenciais do banco de dados a partir do Infisical.
+
+    Args:
+        infisical_secret_path: Caminho do secret no Infisical.
+
+    Returns:
+        Dict com 'DB_USERNAME' e 'DB_PASSWORD'.
+    """
     return get_database_username_and_password_from_secret_env(
         secret_path=infisical_secret_path
     )
@@ -23,6 +32,15 @@ def get_database_username_and_password_from_secret_task(infisical_secret_path: s
 
 @task
 def parse_comma_separated_string_to_list_task(text: Optional[str]) -> List[str]:
+    """
+    Converte string separada por vírgulas em lista.
+
+    Args:
+        text: String com valores separados por vírgula.
+
+    Returns:
+        Lista de strings sem espaços extras.
+    """
     return parse_comma_separated_string_to_list(text)
 
 
@@ -49,6 +67,12 @@ def dump_upload_batch_task(
     only_staging_dataset: bool = False,
     add_timestamp_column: bool = False
 ):
+    """
+    Task Prefect para executar dump e upload de dados em lotes.
+
+    Wrapper de task para dump_upload_batch() com todos os parâmetros.
+    Ver dump_upload_batch() para documentação detalhada dos parâmetros.
+    """
     dump_upload_batch(
         database_type=database_type,
         hostname=hostname,
@@ -88,6 +112,12 @@ def format_partitioned_query_task(
     wait: Optional[str] = None,
     offset: Optional[int] = 1
 ):
+    """
+    Task Prefect para formatar query com particionamento incremental.
+
+    Wrapper de task para format_partitioned_query() com todos os parâmetros.
+    Ver format_partitioned_query() para documentação detalhada dos parâmetros.
+    """
     return format_partitioned_query(
         query=query,
         dataset_id=dataset_id,

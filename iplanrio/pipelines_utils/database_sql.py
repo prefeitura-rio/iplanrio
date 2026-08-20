@@ -1,8 +1,10 @@
 # -*- coding: utf-8 -*-
-"""
-Database definitions for SQL pipelines.
-"""
+"""Classes abstratas e implementações para conexão com bancos de dados SQL.
 
+Fornece interfaces unificadas para interação com diferentes bancos de dados:
+SQL Server, MySQL, Oracle e PostgreSQL. Implementa operações comuns como
+execução de queries, busca em lote e extração de metadados de colunas.
+"""
 from abc import ABC, abstractmethod
 from typing import List
 
@@ -12,8 +14,10 @@ import pyodbc
 
 
 class Database(ABC):
-    """
-    Database abstract class.
+    """Classe abstrata base para conexão com bancos de dados SQL.
+
+    Define interface comum para operações em diferentes bancos de dados,
+    incluindo conexão, execução de queries e busca de dados.
     """
 
     def __init__(
@@ -25,15 +29,15 @@ class Database(ABC):
         database: str,
         **kwargs,
     ) -> None:
-        """
-        Initializes the database.
+        """Inicializa a conexão com o banco de dados.
 
         Args:
-            hostname: The hostname of the database.
-            port: The port of the database.
-            user: The username of the database.
-            password: The password of the database.
-            database: The database name.
+            hostname: Nome ou IP do servidor do banco.
+            port: Porta de conexão.
+            user: Nome de usuário.
+            password: Senha de acesso.
+            database: Nome do banco de dados.
+            **kwargs: Argumentos adicionais específicos do banco.
         """
         self._hostname = hostname
         self._port = port
@@ -45,47 +49,60 @@ class Database(ABC):
 
     @abstractmethod
     def connect(self):
-        """
-        Connect to the database.
+        """Estabelece conexão com o banco de dados.
+
+        Returns:
+            Objeto de conexão específico do banco.
         """
 
     @abstractmethod
     def get_cursor(self):
-        """
-        Returns a cursor for the database.
+        """Retorna cursor para execução de queries.
+
+        Returns:
+            Objeto cursor específico do banco.
         """
 
     @abstractmethod
     def execute_query(self, query: str) -> None:
-        """
-        Execute query on the database.
+        """Executa query SQL no banco de dados.
 
         Args:
-            query: The query to execute.
+            query: Query SQL a ser executada.
         """
 
     @abstractmethod
     def get_columns(self) -> List[str]:
-        """
-        Returns the column names of the database.
+        """Retorna nomes das colunas do resultado da última query.
+
+        Returns:
+            Lista com nomes das colunas.
         """
 
     @abstractmethod
     def fetch_batch(self, batch_size: int) -> List[List]:
-        """
-        Fetches a batch of rows from the database.
+        """Busca um lote de linhas do resultado da query.
+
+        Args:
+            batch_size: Número de linhas a buscar.
+
+        Returns:
+            Lista de listas representando as linhas.
         """
 
     @abstractmethod
     def fetch_all(self) -> List[List]:
-        """
-        Fetches all rows from the database.
+        """Busca todas as linhas do resultado da query.
+
+        Returns:
+            Lista de listas representando todas as linhas.
         """
 
 
 class SqlServer(Database):
-    """
-    SQL Server database.
+    """Implementação para Microsoft SQL Server.
+
+    Usa ODBC Driver 17 para conexão com SQL Server.
     """
 
     def __init__(
@@ -97,15 +114,15 @@ class SqlServer(Database):
         port: int = 1433,
         **kwargs,
     ) -> None:
-        """
-        Initializes the SQL Server database.
+        """Inicializa conexão com SQL Server.
 
         Args:
-            hostname: The hostname of the SQL Server.
-            port: The port of the SQL Server.
-            user: The username of the SQL Server.
-            password: The password of the SQL Server.
-            database: The database name.
+            hostname: Nome ou IP do servidor SQL Server.
+            user: Nome de usuário.
+            password: Senha de acesso.
+            database: Nome do banco de dados.
+            port: Porta de conexão (padrão: 1433).
+            **kwargs: Argumentos adicionais.
         """
         super().__init__(
             hostname,
@@ -116,8 +133,10 @@ class SqlServer(Database):
         )
 
     def connect(self):
-        """
-        Connect to the SQL Server.
+        """Estabelece conexão com SQL Server via ODBC.
+
+        Returns:
+            Objeto de conexão pyodbc.
         """
         conn_str = (
             f"DRIVER={{ODBC Driver 17 for SQL Server}};"
@@ -165,8 +184,9 @@ class SqlServer(Database):
 
 
 class MySql(Database):
-    """
-    MySQL database.
+    """Implementação para MySQL/MariaDB.
+
+    Usa pymysql para conexão com MySQL.
     """
 
     def __init__(
@@ -179,16 +199,16 @@ class MySql(Database):
         charset: str = None,
         **kwargs,
     ) -> None:
-        """
-        Initializes the MySQL database.
+        """Inicializa conexão com MySQL.
 
         Args:
-            hostname: The hostname of the database.
-            port: The port of the database.
-            user: The username of the database.
-            password: The password of the database.
-            database: The database name.
-            charset: The charset of the database. Default is utf8mb4.
+            hostname: Nome ou IP do servidor MySQL.
+            user: Nome de usuário.
+            password: Senha de acesso.
+            database: Nome do banco de dados.
+            port: Porta de conexão (padrão: 3306).
+            charset: Charset do banco (padrão: utf8mb4).
+            **kwargs: Argumentos adicionais.
         """
         port = port if isinstance(port, int) else int(port)
         self._charset = charset or "utf8mb4"
@@ -248,8 +268,9 @@ class MySql(Database):
 
 
 class Oracle(Database):
-    """
-    Oracle Database
+    """Implementação para Oracle Database.
+
+    Usa oracledb (lazy import) para conexão com Oracle.
     """
 
     def __init__(
@@ -261,15 +282,15 @@ class Oracle(Database):
         port: int = 1521,
         **kwargs,
     ) -> None:
-        """
-        Initializes the Oracle database.
+        """Inicializa conexão com Oracle.
 
         Args:
-            hostname: The hostname of the database.
-            port: The port of the database.
-            user: The username of the database.
-            password: The password of the database.
-            database: The database name.
+            hostname: Nome ou IP do servidor Oracle.
+            user: Nome de usuário.
+            password: Senha de acesso.
+            database: Nome do serviço/SID.
+            port: Porta de conexão (padrão: 1521).
+            **kwargs: Argumentos adicionais.
         """
         super().__init__(
             hostname,
@@ -280,11 +301,13 @@ class Oracle(Database):
         )
 
     def connect(self):
-        """
-        Connect to the Oracle database.
+        """Estabelece conexão com Oracle Database.
 
-        Uses lazy import of oracledb to avoid import errors when
-        Oracle database support is not needed.
+        Usa lazy import do oracledb para evitar erros quando suporte
+        Oracle não é necessário.
+
+        Returns:
+            Objeto de conexão oracledb.
         """
         import oracledb  # Lazy import - only loaded when Oracle is used
 
@@ -329,8 +352,9 @@ class Oracle(Database):
 
 
 class Postgres(Database):
-    """
-    PostgreSQL database.
+    """Implementação para PostgreSQL.
+
+    Usa psycopg2 para conexão com PostgreSQL.
     """
 
     def __init__(
@@ -342,15 +366,15 @@ class Postgres(Database):
         port: int = 5432,
         **kwargs,
     ) -> None:
-        """
-        Initializes the PostgreSQL database.
+        """Inicializa conexão com PostgreSQL.
 
         Args:
-            hostname: The hostname of the database.
-            port: The port of the database.
-            user: The username of the database.
-            password: The password of the database.
-            database: The database name.
+            hostname: Nome ou IP do servidor PostgreSQL.
+            user: Nome de usuário.
+            password: Senha de acesso.
+            database: Nome do banco de dados.
+            port: Porta de conexão (padrão: 5432).
+            **kwargs: Argumentos adicionais.
         """
         super().__init__(
             hostname,

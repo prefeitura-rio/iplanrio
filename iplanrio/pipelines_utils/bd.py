@@ -1,4 +1,10 @@
 # -*- coding: utf-8 -*-
+"""Utilitários para integração com o Base dos Dados (BD+) e Google Cloud Storage.
+
+Fornece funções para criação de tabelas, upload de dados para GCS, gerenciamento
+de datasets staging/prod, listagem de blobs, manipulação de credenciais e
+configurações do Base dos Dados.
+"""
 import base64
 from pathlib import Path
 from typing import Dict, List, Union
@@ -36,6 +42,12 @@ def create_table_and_upload_to_gcs_task(
 
 
 def _delete_prod_dataset(only_staging_dataset: bool, dataset_id: str):
+    """Remove dataset de produção se only_staging_dataset for True.
+
+    Args:
+        only_staging_dataset: Se True, deleta o dataset de produção.
+        dataset_id: ID do dataset a ser deletado.
+    """
     ds = bd.Dataset(dataset_id=dataset_id)
     if only_staging_dataset and ds.exists(mode="prod"):
         try:
@@ -54,8 +66,22 @@ def create_table_and_upload_to_gcs(
     source_format: str = "csv",
     only_staging_dataset: bool = False,
 ) -> Union[str, Path]:
-    """
-    Create table using BD+ and upload to GCS.
+    """Cria tabela no BigQuery e faz upload de dados para GCS usando BD+.
+
+    Gerencia criação de tabelas em modo append ou overwrite, cria headers
+    quando necessário, e faz upload dos dados para o Google Cloud Storage.
+
+    Args:
+        data_path: Caminho dos dados a serem enviados.
+        dataset_id: ID do dataset no BigQuery.
+        table_id: ID da tabela no BigQuery.
+        dump_mode: Modo de dump ("append" ou "overwrite").
+        biglake_table: Se True, cria tabela BigLake.
+        source_format: Formato dos dados ("csv" ou "parquet").
+        only_staging_dataset: Se True, trabalha apenas com staging (sem prod).
+
+    Returns:
+        Caminho dos dados enviados.
     """
     bd_version = bd.__version__
     log(f"USING BASEDOSDADOS {bd_version}")
@@ -200,16 +226,15 @@ def create_table_and_upload_to_gcs(
 
 
 def get_storage_blobs(dataset_id: str, table_id: str, mode: str = "staging") -> list:
-    """
-    Get all blobs from a table in a dataset.
+    """Obtém todos os blobs de uma tabela no GCS.
 
     Args:
-        dataset_id (str): dataset id
-        table_id (str): table id
-        mode (str, optional): mode to use. Defaults to "staging".
+        dataset_id: ID do dataset.
+        table_id: ID da tabela.
+        mode: Modo de acesso ("staging" ou "prod").
 
     Returns:
-        list: list of blobs
+        Lista de blobs do Google Cloud Storage.
     """
 
     bd_storage = bd.Storage(dataset_id=dataset_id, table_id=table_id)
@@ -221,11 +246,16 @@ def get_storage_blobs(dataset_id: str, table_id: str, mode: str = "staging") -> 
 
 
 def get_project_id(mode: str = None) -> str:
-    """
-    Get the project ID from the environment.
+    """Obtém o ID do projeto Google Cloud a partir das configurações.
 
     Args:
-        mode (str): The mode to filter by (prod or staging).
+        mode: Modo do ambiente ("prod" ou "staging").
+
+    Returns:
+        ID do projeto Google Cloud.
+
+    Raises:
+        ValueError: Se mode não for "prod" ou "staging".
     """
 
     if mode not in ["prod", "staging"]:
@@ -237,10 +267,17 @@ def get_project_id(mode: str = None) -> str:
 def list_blobs_with_prefix(
     bucket_name: str, prefix: str, mode: str = "prod"
 ) -> List[Blob]:
-    """
-    Lists all the blobs in the bucket that begin with the prefix.
-    This can be used to list all blobs in a "folder", e.g. "public/".
-    Mode needs to be "prod" or "staging"
+    """Lista blobs no bucket que começam com o prefixo especificado.
+
+    Útil para listar blobs em uma "pasta" específica.
+
+    Args:
+        bucket_name: Nome do bucket GCS.
+        prefix: Prefixo para filtrar blobs (ex: "public/").
+        mode: Modo de acesso ("prod" ou "staging").
+
+    Returns:
+        Lista de objetos Blob que correspondem ao prefixo.
     """
 
     credentials = get_bd_credentials_from_env(mode=mode)
@@ -253,15 +290,15 @@ def list_blobs_with_prefix(
 
 
 def secret_to_base64(secret_dict: Dict) -> str:
-    """
-    Converts a dictionary to a JSON-formatted string, encodes it in Base64,
-    and returns the Base64-encoded string.
+    """Converte dicionário para string Base64.
+
+    Serializa o dicionário para JSON e codifica em Base64.
 
     Args:
-    secret_dict (Dict): A dictionary to be encoded.
+        secret_dict: Dicionário a ser codificado.
 
     Returns:
-    str: A Base64-encoded string.
+        String codificada em Base64.
     """
     input_string = str(secret_dict).replace("'", '"')
     bytes_data = input_string.encode("utf-8")
@@ -271,15 +308,16 @@ def secret_to_base64(secret_dict: Dict) -> str:
 
 
 def get_base64_bd_config(projec_id: str) -> str:
-    """
-    Generates a Base64-encoded configuration string for a project ID,
-    formatted for use with a data bucket and Google Cloud configurations.
+    """Gera configuração Base dos Dados em Base64 para um projeto.
+
+    Cria arquivo de configuração TOML com credenciais staging/prod e
+    retorna codificado em Base64.
 
     Args:
-    projec_id (str): The project ID used in the configuration.
+        projec_id: ID do projeto Google Cloud.
 
     Returns:
-    str: A Base64-encoded configuration string.
+        String de configuração codificada em Base64.
     """
 
     string = f"""# What is the bucket that you are saving all the data? It should be
@@ -310,14 +348,13 @@ def get_base64_bd_config(projec_id: str) -> str:
 
 
 def base64_to_string(base64_string: str) -> str:
-    """
-    Decodes a Base64-encoded string back to a regular string.
+    """Decodifica string Base64 para string regular.
 
     Args:
-    base_64 (str): The Base64 string to be decoded.
+        base64_string: String codificada em Base64.
 
     Returns:
-    str: The decoded string.
+        String decodificada.
     """
     base64_bytes = base64_string.encode("utf-8")
     message_bytes = base64.b64decode(base64_bytes)

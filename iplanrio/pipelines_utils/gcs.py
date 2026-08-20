@@ -1,4 +1,10 @@
 # -*- coding: utf-8 -*-
+"""Utilitários para interação com Google Cloud Storage (GCS).
+
+Fornece funções para gerenciamento de blobs, upload de arquivos, listagem
+com prefixos, deleção em lote e extração de informações de particionamento
+a partir de estruturas de diretórios.
+"""
 from typing import List
 
 from google.cloud import storage
@@ -8,9 +14,12 @@ from iplanrio.pipelines_utils.env import get_bd_credentials_from_env
 
 
 def delete_blobs_list(bucket_name: str, blobs: List[Blob], mode: str = "prod") -> None:
-    """
-    Deletes all blobs in the bucket that are in the blobs list.
-    Mode needs to be "prod" or "staging"
+    """Deleta todos os blobs especificados do bucket.
+
+    Args:
+        bucket_name: Nome do bucket GCS.
+        blobs: Lista de blobs a serem deletados.
+        mode: Modo de acesso ("prod" ou "staging").
     """
     storage_client = get_gcs_client(mode=mode)
 
@@ -19,15 +28,13 @@ def delete_blobs_list(bucket_name: str, blobs: List[Blob], mode: str = "prod") -
 
 
 def get_gcs_client(mode: str = "staging") -> storage.Client:
-    """
-    Get a GCS client with the credentials from the environment.
-    Mode needs to be "prod" or "staging"
+    """Obtém cliente GCS autenticado com credenciais do ambiente.
 
     Args:
-        mode (str): The mode to filter by (prod or staging).
+        mode: Modo de acesso ("prod" ou "staging").
 
     Returns:
-        storage.Client: The GCS client.
+        Cliente Google Cloud Storage autenticado.
     """
 
     credentials = get_bd_credentials_from_env(mode=mode)
@@ -37,18 +44,17 @@ def get_gcs_client(mode: str = "staging") -> storage.Client:
 def list_blobs_with_prefix(
     bucket_name: str, prefix: str, mode: str = "staging"
 ) -> List[Blob]:
-    """
-    Lists all the blobs in the bucket that begin with the prefix.
-    This can be used to list all blobs in a "folder", e.g. "public/".
-    Mode needs to be "prod" or "staging"
+    """Lista blobs no bucket que começam com o prefixo especificado.
+
+    Útil para listar blobs em uma "pasta" específica.
 
     Args:
-        bucket_name (str): The name of the bucket.
-        prefix (str): The prefix to filter by.
-        mode (str): The mode to filter by (prod or staging).
+        bucket_name: Nome do bucket GCS.
+        prefix: Prefixo para filtrar blobs (ex: "public/").
+        mode: Modo de acesso ("prod" ou "staging").
 
     Returns:
-        List[Blob]: The list of blobs.
+        Lista de objetos Blob que correspondem ao prefixo.
     """
     storage_client = get_gcs_client(mode=mode)
     blobs = storage_client.list_blobs(bucket_name, prefix=prefix)
@@ -56,8 +62,15 @@ def list_blobs_with_prefix(
 
 
 def parse_blobs_to_partition_dict(blobs: list) -> dict:
-    """
-    Extracts the partition information from the blobs.
+    """Extrai informações de particionamento dos caminhos dos blobs.
+
+    Analisa caminhos no formato "partition=value" e agrupa por chave.
+
+    Args:
+        blobs: Lista de blobs a serem analisados.
+
+    Returns:
+        Dicionário mapeando chaves de partição para listas de valores.
     """
 
     partitions_dict = {}
@@ -74,8 +87,13 @@ def parse_blobs_to_partition_dict(blobs: list) -> dict:
 
 
 def parse_blobs_to_partition_list(blobs: List[Blob]) -> List[str]:
-    """
-    Extracts the partition information from the blobs.
+    """Extrai valores da partição 'data_particao' dos caminhos dos blobs.
+
+    Args:
+        blobs: Lista de blobs a serem analisados.
+
+    Returns:
+        Lista de valores encontrados para a partição 'data_particao'.
     """
     partitions = []
     for blob in blobs:
@@ -91,15 +109,16 @@ def parse_blobs_to_partition_list(blobs: List[Blob]) -> List[str]:
 def upload_file_to_bucket(
     bucket_name: str, file_path: str, destination_blob_name: str, mode: str = None
 ) -> "Blob":
-    """
-    Uploads a file to the bucket.
-    Mode needs to be "prod" or "staging"
+    """Faz upload de arquivo para o bucket GCS.
 
     Args:
-        bucket_name (str): The name of the bucket.
-        file_path (str): The path of the file to upload.
-        destination_blob_name (str): The name of the blob.
-        mode (str): The mode to filter by (prod or staging).
+        bucket_name: Nome do bucket de destino.
+        file_path: Caminho local do arquivo a ser enviado.
+        destination_blob_name: Nome do blob no bucket.
+        mode: Modo de acesso ("prod" ou "staging").
+
+    Returns:
+        Objeto Blob representando o arquivo enviado.
     """
 
     storage_client = get_gcs_client(mode=mode)
