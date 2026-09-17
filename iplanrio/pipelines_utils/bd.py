@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
 import base64
+import os
 from pathlib import Path
-from typing import Dict, List, Union
+from typing import Dict, List, Optional, Union
 
 import basedosdados as bd
 from basedosdados import Base
@@ -23,6 +24,7 @@ def create_table_and_upload_to_gcs_task(
     biglake_table: bool = True,
     source_format: str = "csv",
     only_staging_dataset: bool = False,
+    project_id: Optional[str] = "rj-iplanrio",
 ) -> Union[str, Path]:
     return create_table_and_upload_to_gcs(
         data_path=data_path,
@@ -32,6 +34,7 @@ def create_table_and_upload_to_gcs_task(
         biglake_table=biglake_table,
         source_format=source_format,
         only_staging_dataset=only_staging_dataset,
+        project_id=project_id,
     )
 
 
@@ -53,12 +56,25 @@ def create_table_and_upload_to_gcs(
     biglake_table: bool = True,
     source_format: str = "csv",
     only_staging_dataset: bool = False,
+    project_id: Optional[str] = "rj-iplanrio",
 ) -> Union[str, Path]:
     """
     Create table using BD+ and upload to GCS.
+
+    Args:
+        project_id (str, optional): If provided, overrides the GCP project used for
+            both BigQuery and GCS. Useful for uploading data to a project different
+            from the one configured in ~/.basedosdados/config.toml or
+            BASEDOSDADOS_CONFIG env var.
     """
     bd_version = bd.__version__
     log(f"USING BASEDOSDADOS {bd_version}")
+
+    if project_id is not None:
+        log(f"Overriding project to: {project_id}")
+        encoded_config = get_base64_bd_config(project_id)
+        os.environ["BASEDOSDADOS_CONFIG"] = encoded_config
+
     tb = bd.Table(dataset_id=dataset_id, table_id=table_id)
     log(f"Dataset:{dataset_id} Table:{table_id} ")
     table_staging = f"{tb.table_full_name['staging']}"
