@@ -20,13 +20,13 @@ Portanto, o mecanismo correto é:
 
 Uso em ``tasks.py`` e ``utils.py`` (importados como pacote — ``__name__`` correto)::
 
-    from prefect_rj_iplanrio.log import get_logger
+    from prefect_rj_iplanrio.logging import get_logger
 
     logger = get_logger(__name__)  # ex: "pipelines.rj_sec__pipe.tasks"
 
 Uso em ``flow.py`` (carregado pelo Prefect como ``__main__`` — nome explícito obrigatório)::
 
-    from prefect_rj_iplanrio.log import get_logger
+    from prefect_rj_iplanrio.logging import get_logger
 
     logger = get_logger("pipelines.rj_sec__pipe.flow")
 

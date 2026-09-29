@@ -26,8 +26,10 @@ from prefect import task
 
 from iplanrio.pipelines_templates.dump_url.utils import handle_dataframe_chunk
 from iplanrio.pipelines_utils.env import get_credentials_from_env
-from iplanrio.pipelines_utils.logging import log
+from iplanrio.pipelines_utils.logging import get_logger
 from iplanrio.pipelines_utils.pandas import remove_columns_accents
+
+logger = get_logger(__name__)
 
 
 @task
@@ -68,7 +70,7 @@ def download_url(
     filepath = Path(fname)
     filepath.parent.mkdir(parents=True, exist_ok=True)
 
-    log(f"Starting download from URL: {url} (type: {url_type})")
+    logger.info("Starting download from URL: %s (type: %s)", url, url_type)
 
     try:
         if url_type == "google_sheet":
@@ -88,10 +90,10 @@ def download_url(
                 f"Invalid URL type: {url_type}. Supported types: direct, google_drive, google_sheet"
             )
 
-        log(f"Successfully downloaded data to: {filepath}")
+        logger.info("Successfully downloaded data to: %s", filepath)
 
     except Exception as e:
-        log(f"Error downloading from {url}: {str(e)}", "error")
+        logger.error("Error downloading from %s: %s", url, e)
         raise
 
 
@@ -109,7 +111,7 @@ def _download_google_sheet(
             f"Google Sheets URL must start with {url_prefix}. Invalid URL: {url}"
         )
 
-    log("Processing Google Sheets URL")
+    logger.info("Processing Google Sheets URL")
 
     credentials = get_credentials_from_env(
         scopes=[
@@ -124,24 +126,24 @@ def _download_google_sheet(
     # Select worksheet by name or order
     if sheet_name:
         worksheet = sheet.worksheet(sheet_name)
-        log(f"Selected worksheet by name: {sheet_name}")
+        logger.info("Selected worksheet by name: %s", sheet_name)
     else:
         worksheet = sheet.get_worksheet(sheet_order)
-        log(f"Selected worksheet by order: {sheet_order}")
+        logger.info("Selected worksheet by order: %s", sheet_order)
 
     # Get data from worksheet
     if sheet_range:
-        log(f"Getting data from range: {sheet_range}")
+        logger.info("Getting data from range: %s", sheet_range)
         dataframe = pd.DataFrame(worksheet.batch_get((sheet_range,))[0])
     else:
-        log("Getting all data from worksheet")
+        logger.info("Getting all data from worksheet")
         dataframe = pd.DataFrame(worksheet.get_values())
 
     if dataframe.empty:
         raise ValueError("No data found in the selected worksheet")
 
-    log(f"Dataframe shape: {dataframe.shape}")
-    log(f"Dataframe columns: {dataframe.columns.tolist()}")
+    logger.info("Dataframe shape: %s", dataframe.shape)
+    logger.info("Dataframe columns: %s", dataframe.columns.tolist())
 
     # Process headers and clean data
     new_header = dataframe.iloc[0]
@@ -150,16 +152,16 @@ def _download_google_sheet(
 
     # Remove accents from column names
     dataframe.columns = remove_columns_accents(dataframe)
-    log(f"Cleaned columns: {dataframe.columns.tolist()}")
+    logger.info("Cleaned columns: %s", dataframe.columns.tolist())
 
     # Save to CSV
     dataframe.to_csv(filepath, index=False)
-    log(f"Google Sheets data saved to: {filepath}")
+    logger.info("Google Sheets data saved to: %s", filepath)
 
 
 def _download_direct_url(url: str, filepath: Path) -> None:
     """Helper function to download data from direct URLs."""
-    log("Downloading from direct URL")
+    logger.info("Downloading from direct URL")
 
     response = requests.get(url, stream=True, timeout=300)  # 5 minute timeout
     response.raise_for_status()
@@ -177,16 +179,18 @@ def _download_direct_url(url: str, filepath: Path) -> None:
                 if total_size > 0:
                     progress = (downloaded_size / total_size) * 100
                     if downloaded_size % (1024 * 1024) == 0:  # Log every MB
-                        log(
-                            f"Download progress: {progress:.1f}% ({downloaded_size / (1024*1024):.1f} MB)"
+                        logger.info(
+                            "Download progress: %.1f%% (%.1f MB)",
+                            progress,
+                            downloaded_size / (1024 * 1024),
                         )
 
-    log(f"Direct URL download completed: {filepath}")
+    logger.info("Direct URL download completed: %s", filepath)
 
 
 def _download_google_drive(url: str, filepath: Path) -> None:
     """Helper function to download data from Google Drive."""
-    log("Processing Google Drive URL")
+    logger.info("Processing Google Drive URL")
 
     # Extract file ID from URL
     url_prefix = "https://drive.google.com/file/d/"
@@ -196,7 +200,7 @@ def _download_google_drive(url: str, filepath: Path) -> None:
         )
 
     file_id = url.removeprefix(url_prefix).split("/")[0]
-    log(f"Extracted file ID: {file_id}")
+    logger.info("Extracted file ID: %s", file_id)
 
     credentials = get_credentials_from_env(
         scopes=["https://www.googleapis.com/auth/drive"]
@@ -214,15 +218,15 @@ def _download_google_drive(url: str, filepath: Path) -> None:
                 status, done = downloader.next_chunk()
                 if status:
                     progress = int(status.progress() * 100)
-                    log(f"Google Drive download progress: {progress}%")
+                    logger.info("Google Drive download progress: %d%%", progress)
 
-        log(f"Google Drive download completed: {filepath}")
+        logger.info("Google Drive download completed: %s", filepath)
 
     except HttpError as error:
-        log(f"Google Drive API error: {error}", "error")
+        logger.error("Google Drive API error: %s", error)
         raise
     except Exception as e:
-        log(f"Unexpected error during Google Drive download: {str(e)}", "error")
+        logger.error("Unexpected error during Google Drive download: %s", e)
         raise
 
 
@@ -267,10 +271,10 @@ def dump_files(
     if not input_path.exists():
         raise FileNotFoundError(f"Input file not found: {file_path}")
 
-    log(f"Starting file processing: {file_path}")
-    log(f"Chunk size: {chunksize:,} rows")
-    log(f"Partition columns: {partition_columns}")
-    log(f"Save path: {save_path}")
+    logger.info("Starting file processing: %s", file_path)
+    logger.info("Chunk size: %d rows", chunksize)
+    logger.info("Partition columns: %s", partition_columns)
+    logger.info("Save path: %s", save_path)
 
     # Create save directory if it doesn't exist
     save_path_obj = Path(save_path)
@@ -278,7 +282,7 @@ def dump_files(
 
     # Generate unique event ID for this processing session
     event_id = datetime.now().strftime("%Y%m%d-%H%M%S")
-    log(f"Processing session ID: {event_id}")
+    logger.info("Processing session ID: %s", event_id)
 
     try:
         chunk_count = 0
@@ -298,7 +302,7 @@ def dump_files(
             chunk_rows = len(chunk)
             total_rows += chunk_rows
 
-            log(f"Processing chunk {chunk_count}: {chunk_rows:,} rows")
+            logger.info("Processing chunk %d: %d rows", chunk_count, chunk_rows)
 
             # Process the chunk
             handle_dataframe_chunk(
@@ -313,15 +317,17 @@ def dump_files(
 
             # Log progress every 10 chunks
             if chunk_count % 10 == 0:
-                log(
-                    f"Progress: {chunk_count} chunks processed, {total_rows:,} total rows"
+                logger.info(
+                    "Progress: %d chunks processed, %d total rows",
+                    chunk_count,
+                    total_rows,
                 )
 
-        log(f"File processing completed successfully!")
-        log(f"Total chunks processed: {chunk_count}")
-        log(f"Total rows processed: {total_rows:,}")
-        log(f"Output saved to: {save_path}")
+        logger.info("File processing completed successfully!")
+        logger.info("Total chunks processed: %d", chunk_count)
+        logger.info("Total rows processed: %d", total_rows)
+        logger.info("Output saved to: %s", save_path)
 
     except Exception as e:
-        log(f"Error processing file {file_path}: {str(e)}", "error")
+        logger.error("Error processing file %s: %s", file_path, e)
         raise

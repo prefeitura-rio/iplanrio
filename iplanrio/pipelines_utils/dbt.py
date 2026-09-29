@@ -6,7 +6,9 @@ import git
 from prefect import task
 from prefect_dbt import PrefectDbtRunner
 
-from iplanrio.pipelines_utils.logging import log
+from iplanrio.pipelines_utils.logging import get_logger
+
+logger = get_logger(__name__)
 
 
 def download_repository(git_repository_path: str) -> str:
@@ -24,7 +26,7 @@ def download_repository(git_repository_path: str) -> str:
             shutil.rmtree(repository_path, ignore_errors=False)
         os.makedirs(repository_path)
 
-        log(f"Repository folder created: {repository_path}", level="info")
+        logger.info("Repository folder created: %s", repository_path)
 
     except Exception as e:
         raise Exception(f"Error when creating repository folder: {e}")
@@ -32,14 +34,14 @@ def download_repository(git_repository_path: str) -> str:
     # Download repository
     try:
         git.Repo.clone_from(git_repository_path, repository_path)
-        log(f"Repository downloaded: {git_repository_path}", level="info")
+        logger.info("Repository downloaded: %s", git_repository_path)
     except git.GitCommandError as e:
         raise Exception(f"Error when downloading repository: {e}")
 
     # check for 'queries' folder
     queries_path = os.path.join(repository_path, "queries")
     if os.path.isdir(queries_path):
-        log(f"'queries' folder found at: {queries_path}", level="info")
+        logger.info("'queries' folder found at: %s", queries_path)
         return queries_path
 
     return repository_path
@@ -90,7 +92,7 @@ def execute_dbt_task(
         if flag:
             command_args.extend([flag])
 
-    log(f"Executing dbt command: {' '.join(command_args)}", level="info")
+    logger.info("Executing dbt command: %s", " ".join(command_args))
 
     # Initialize PrefectDbtRunner
     runner = PrefectDbtRunner(
@@ -99,21 +101,18 @@ def execute_dbt_task(
     # Execute the dbt deps command
     try:
         deps_result = runner.invoke(["deps"])
-        log("✅ DBT dependencies installed successfully", level="info")
-        log(msg=str(deps_result))
+        logger.info("DBT dependencies installed successfully")
+        logger.info("%s", deps_result)
     except Exception as e:
-        log(f"❌ Error installing DBT dependencies: {e}", level="error")
+        logger.error("Error installing DBT dependencies: %s", e)
         raise
 
     # Execute the dbt command with the constructed arguments
     try:
         running_result = runner.invoke(command_args)
-        log(
-            f"DBT command completed with success: {running_result.success}",
-            level="info",
-        )
+        logger.info("DBT command completed with success: %s", running_result.success)
     except Exception as e:
-        log(f"Error executing DBT command: {e}", level="error")
+        logger.error("Error executing DBT command: %s", e)
         raise
 
-    log(msg=str(running_result))
+    logger.info("%s", running_result)
