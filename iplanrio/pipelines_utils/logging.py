@@ -61,13 +61,10 @@ _FALLBACK_DATE_FORMAT = "%Y-%m-%d %H:%M:%S"
 def _level_from_env() -> int:
     """Lê o nível de log de ``PREFECT_LOGGING_LEVEL``; ``DEBUG`` se ausente/inválido.
 
-    ``env`` importa este módulo, por isso é importado aqui dentro e não no topo.
-    Consequência: ``get_logger`` não pode ser chamado em nível de módulo dentro de
-    ``env.py`` (o módulo ainda estaria incompleto); chame-o dentro das funções.
+    Lê ``os.environ`` direto (sem importar ``env``) para não criar import circular:
+    ``env`` importa este módulo e chama ``get_logger`` ao ser carregado.
     """
-    from iplanrio.pipelines_utils.env import getenv_or_action
-
-    value = str(getenv_or_action(LEVEL_ENV_VAR, default="", action="ignore"))
+    value = os.environ.get(LEVEL_ENV_VAR, "")
     return logging.getLevelNamesMapping().get(value.strip().upper(), DEFAULT_LEVEL)
 
 
@@ -113,12 +110,31 @@ def _pipeline_from_logger_name(name: str) -> Optional[str]:
     return None
 
 
+# Campos do flow run (inclui as tags do deployment), guardados por ``flow_run_id``:
+# os logs finais do Prefect saem fora do contexto do run.
+_FLOW_RUN_FIELDS: dict[str, dict[str, Any]] = {}
+
+# Tags do deployment (formato ``chave:valor``) copiadas para o log.
+_TAG_FIELDS = ("code_owner", "severity")
+
+
+def _tag_fields(tags: Any) -> dict[str, str]:
+    """Extrai de tags ``chave:valor`` (ex.: ``code_owner:fulano``) os campos de ``_TAG_FIELDS``."""
+    found: dict[str, str] = {}
+    for tag in sorted(tags or ()):
+        key, sep, value = str(tag).partition(":")
+        if sep and key in _TAG_FIELDS:
+            found.setdefault(key, value)
+    return found
+
+
 class RunContextFilter(logging.Filter):
     """Anexa ao record o ambiente, o pipeline e os dados do flow/task run.
 
     Do run: nomes, IDs, tentativa (``*_run_count``), ``deployment_id``,
-    ``deployment_version`` (tag da imagem) e ``work_pool_name``. Valores ausentes
-    (ex.: run sem deployment) não são anexados.
+    ``deployment_version`` (tag da imagem), ``work_pool_name`` e, das tags do
+    deployment, ``code_owner`` e ``severity`` (``code_owner:fulano``). Valores
+    ausentes (ex.: run sem deployment) não são anexados.
 
     O ambiente (``staging``/``prod``) vem de ``PREFECT_LOGGING_ENVIRONMENT``, definida
     no Infisical; sem a variável, o campo ``environment`` não é anexado.
@@ -137,22 +153,35 @@ class RunContextFilter(logging.Filter):
             fields["pipeline"] = pipeline
         if (flow_ctx := FlowRunContext.get()) and flow_ctx.flow_run:
             flow_run = flow_ctx.flow_run
-            fields["flow_name"] = flow_ctx.flow.name if flow_ctx.flow else None
-            fields["flow_run_id"] = str(flow_run.id)
-            fields["flow_run_name"] = flow_run.name
-            fields["flow_run_count"] = flow_run.run_count
-            fields["deployment_id"] = str(flow_run.deployment_id or "") or None
-            fields["deployment_version"] = flow_run.deployment_version
-            fields["work_pool_name"] = flow_run.work_pool_name
+            flow_fields = {
+                "flow_name": flow_ctx.flow.name if flow_ctx.flow else None,
+                "flow_run_id": str(flow_run.id),
+                "flow_run_name": flow_run.name,
+                "flow_run_count": flow_run.run_count,
+                "deployment_id": str(flow_run.deployment_id or "") or None,
+                "deployment_version": flow_run.deployment_version,
+                "work_pool_name": flow_run.work_pool_name,
+                **_tag_fields(flow_run.tags),
+            }
+            _FLOW_RUN_FIELDS[flow_fields["flow_run_id"]] = {
+                k: v for k, v in flow_fields.items() if v is not None
+            }
+            fields.update(flow_fields)
         if (task_ctx := TaskRunContext.get()) and task_ctx.task_run:
             fields["task_name"] = task_ctx.task.name if task_ctx.task else None
             fields["task_run_id"] = str(task_ctx.task_run.id)
             fields["task_run_name"] = task_ctx.task_run.name
             fields["task_run_count"] = task_ctx.task_run.run_count
+        run_id = str(fields.get("flow_run_id") or getattr(record, "flow_run_id", ""))
+        for key, value in _FLOW_RUN_FIELDS.get(run_id, {}).items():
+            fields.setdefault(key, value)
         for key, value in fields.items():
             if value is not None:
                 record.__dict__.setdefault(key, value)
         return True
+
+
+_CONTEXT_FILTER = RunContextFilter()
 
 
 # Início dos flow runs (segundos), para calcular a duração no log final.
@@ -214,6 +243,8 @@ class StructuredFormatter(logging.Formatter):
         super().__init__()
 
     def format(self, record: logging.LogRecord) -> str:
+        # Os loggers do próprio Prefect não passam pelo RunContextFilter.
+        _CONTEXT_FILTER.filter(record)
         payload: dict[str, Any] = {
             "timestamp": datetime.fromtimestamp(record.created, tz=timezone.utc).isoformat(
                 timespec="milliseconds"
