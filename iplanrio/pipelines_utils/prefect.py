@@ -14,9 +14,7 @@ from prefect.schedules import Interval
 
 from iplanrio.pipelines_utils.constants import NOT_SET
 from iplanrio.pipelines_utils.io import query_to_line
-from iplanrio.pipelines_utils.logging import get_logger
-
-logger = get_logger(__name__)
+from iplanrio.pipelines_utils.logging import log
 
 
 @task
@@ -28,7 +26,7 @@ def rename_current_flow_run_task(new_name: str):
     # Pega o contexto da execução atual para obter o ID
     context = get_run_context()
     flow_run_id = context.task_run.flow_run_id
-    logger.info("Obtido o ID da execução do fluxo: %s", flow_run_id)
+    log(f"Obtido o ID da execução do fluxo: {flow_run_id}")
 
     # Usa o cliente assíncrono do Prefect para interagir com a API
     # 1. Define uma função async interna para fazer o trabalho com o cliente
@@ -38,7 +36,7 @@ def rename_current_flow_run_task(new_name: str):
 
     asyncio.run(_update_run_name())
 
-    logger.info("Nome da execução do fluxo atualizado para %s!", new_name)
+    log(f"Nome da execução do fluxo atualizado para {new_name}!")
 
 
 def generate_dump_db_schedules(
@@ -167,12 +165,10 @@ async def delete_flow_run_batch(
     total_deleted_count = 0
     batch_number = 0
 
-    logger.info("Iniciando processo para deletar até %d execuções de fluxo.", number_of_runs)
-    logger.info("Filtros: flow_name='%s', states=%s", flow_name, states)
-    logger.info(
-        "Estimativa: %d lotes de no máximo %d execuções cada.",
-        total_estimated_batches,
-        API_FETCH_LIMIT,
+    print(f"Iniciando processo para deletar até {number_of_runs} execuções de fluxo.")
+    print(f"Filtros: flow_name='{flow_name}', states={states}")
+    print(
+        f"Estimativa: {total_estimated_batches} lotes de no máximo {API_FETCH_LIMIT} execuções cada."
     )
     total_time = 0
     async with get_client() as client:
@@ -197,21 +193,18 @@ async def delete_flow_run_batch(
                     limit=runs_to_fetch,
                 )
             except Exception as e:
-                logger.error("Erro ao buscar lote da API: %s. Interrompendo.", e)
+                print(f"Erro ao buscar lote da API: {e}. Interrompendo.")
                 break
 
             if not flow_runs_in_batch:
-                logger.info(
+                print(
                     "Nenhuma execução de fluxo adicional foi encontrada. O processo será finalizado."
                 )
                 break
 
             total_in_batch = len(flow_runs_in_batch)
-            logger.info(
-                "Lote: %d/%d with %d runs.",
-                batch_number,
-                total_estimated_batches,
-                total_in_batch,
+            print(
+                f"Lote: {batch_number}/{total_estimated_batches} with {total_in_batch} runs."
             )
             semaphore = asyncio.Semaphore(concurrency_limit)
 
@@ -238,22 +231,17 @@ async def delete_flow_run_batch(
                     * (total_estimated_batches - batch_number)
                 )
             )[:7]
-            logger.info(
-                "Deleted: %d/%d - %.2f%% | %.2fs / %s",
-                total_deleted_count,
-                number_of_runs,
-                round(100 * total_deleted_count / number_of_runs, 2),
-                round(batch_time, 2),
-                estimated_time_to_finish,
+            print(
+                f"  Deleted: {total_deleted_count}/{number_of_runs} - {round(100 * total_deleted_count/number_of_runs, 2)}% | {round(batch_time, 2)}s / {estimated_time_to_finish}"
             )
             if total_in_batch < runs_to_fetch:
-                logger.info(
+                print(
                     "Último lote de execuções disponível foi processado. O processo será finalizado."
                 )
                 break
 
-    logger.info("Operação finalizada após processar %d lote(s).", batch_number)
-    logger.info("Total de %d execuções deletadas.", total_deleted_count)
+    print(f"\nOperação finalizada após processar {batch_number} lote(s).")
+    print(f"Total de {total_deleted_count} execuções deletadas.")
     return total_deleted_count
 
 

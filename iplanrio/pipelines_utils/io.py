@@ -8,9 +8,7 @@ from typing import List, Union
 import croniter
 import ruamel.yaml as ryaml
 
-from iplanrio.pipelines_utils.logging import get_logger
-
-logger = get_logger(__name__)
+from iplanrio.pipelines_utils.logging import log
 
 
 def determine_whether_to_execute_or_not(
@@ -49,17 +47,13 @@ def extract_last_partition_date(partitions_dict: dict, date_format: str):
             last_partition_date = datetime.strptime(
                 max(new_values), date_format
             ).strftime(date_format)
-            logger.info(
-                "last partition from %s is in date format %s: %s",
-                partition,
-                date_format,
-                last_partition_date,
+            log(
+                f"last partition from {partition} is in date format "
+                f"{date_format}: {last_partition_date}"
             )
         except ValueError:
-            logger.warning(
-                "partition %s is not a date or not in correct format %s",
-                partition,
-                date_format,
+            log(
+                f"partition {partition} is not a date or not in correct format {date_format}"
             )
     return last_partition_date
 

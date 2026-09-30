@@ -9,10 +9,8 @@ import requests
 from prefect import task
 from shapely.geometry import LineString, Point, Polygon
 
-from iplanrio.pipelines_utils.logging import get_logger
+from iplanrio.pipelines_utils.logging import log
 from iplanrio.pipelines_utils.pandas import remove_columns_accents
-
-logger = get_logger(__name__)
 
 
 @task
@@ -28,7 +26,7 @@ def download_data_from_arcgis_task(
     url = url[:-1] if url.endswith("/") else url
     url = url + "/query" if not url.endswith("/query") else url
 
-    logger.info("Using url:\n%s", url)
+    log(f"Using url:\n{url}")
 
     params = {
         "where": "1=1",
@@ -40,7 +38,7 @@ def download_data_from_arcgis_task(
     offset = 0
     all_features = []
 
-    logger.info("Iniciando o download...")
+    log("Iniciando o download...")
     pages = 0
     while True:
         params["resultOffset"] = offset
@@ -49,32 +47,30 @@ def download_data_from_arcgis_task(
             response.raise_for_status()
             data = response.json()
         except requests.exceptions.RequestException as e:
-            logger.error("Erro ao conectar com o servidor: %s", e)
+            log(f"Erro ao conectar com o servidor: {e}")
             raise ValueError(f"Erro ao conectar com o servidor: {e}")
 
         features = data.get("features", [])
         if not features:
-        logger.info("Busca finalizada.")
-        break
+            log("Busca finalizada.")
+            break
 
-    all_features.extend(features)
-    offset += len(features)
-    pages += 1
-    logger.info("Página %d baixada com %d registros.", pages, len(features))
+        all_features.extend(features)
+        offset += len(features)
+        pages += 1
+        log(f"Página {pages} baixada com {len(features)} registros.")
         if not data.get("exceededTransferLimit", False):
             break
 
     if not all_features:
-        logger.warning("Nenhum dado foi encontrado.")
+        log("Nenhum dado foi encontrado.")
         raise ValueError("Nenhum dado foi encontrado.")
 
-    logger.info(
-        "Download completo!\nTotal de %d páginas.\nTotal de %d rows.",
-        pages,
-        len(all_features),
+    log(
+        f"Download completo!\nTotal de {pages} páginas.\nTotal de {len(all_features)} rows."
     )
 
-    logger.info("Processando dados e criando GeoDataFrame...")
+    log("Processando dados e criando GeoDataFrame...")
 
     processed_data = []
     for feature in all_features:
@@ -103,24 +99,24 @@ def download_data_from_arcgis_task(
                 processed_data.append(current_attributes)
 
     dataframe = pd.DataFrame(processed_data)
-    logger.info("old columns: %s", list(dataframe.columns))
+    log(f"old columns: {list(dataframe.columns)}")
     new_columns = remove_columns_accents(dataframe=dataframe)
-    logger.info("new columns: %s", new_columns)
+    log(f"new columns: {new_columns}")
     dataframe.columns = new_columns
     dataframe = gpd.GeoDataFrame(
         dataframe,
         crs=crs,  # Define o CRS original (UTM)
     )
-    logger.info("Convertendo coordenadas para de %s para EPSG:4326 (Lat/Lon)...", crs)
+    log(f"Convertendo coordenadas para de {crs} para EPSG:4326 (Lat/Lon)...")
     # Converte o GeoDataFrame para o sistema de coordenadas geográficas padrão
     dataframe = dataframe.to_crs("EPSG:4326")
     if "latitude" in dataframe.columns:
         dataframe["latitude"] = dataframe.geometry.y
         dataframe["longitude"] = dataframe.geometry.x
-    logger.info("Processo concluído!")
+    log("Processo concluído!")
     path = Path(path)
     path.mkdir(parents=True, exist_ok=True)
     dataframe.to_csv(path / "data.csv", index=False)
-    logger.info("Dados salvos em %s/", path)
+    log(f"Dados salvos em {path}/")
 
     return path

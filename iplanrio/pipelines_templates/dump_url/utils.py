@@ -8,7 +8,7 @@ from typing import List
 
 import pandas as pd
 
-from iplanrio.pipelines_utils.logging import get_logger
+from iplanrio.pipelines_utils.logging import log
 from iplanrio.pipelines_utils.pandas import (
     clean_dataframe,
     dataframe_to_csv,
@@ -16,8 +16,6 @@ from iplanrio.pipelines_utils.pandas import (
     remove_columns_accents,
     to_partitions,
 )
-
-logger = get_logger(__name__)
 
 
 # pylint: disable=R0913
@@ -43,15 +41,12 @@ def handle_dataframe_chunk(
     new_columns_dict = dict(zip(old_columns, dataframe.columns.tolist()))
     if idx == 0:
         if partition_column:
-            logger.info(
-                "Partition column: %s FOUND!! Write to partitioned files",
-                partition_column,
-            )
+            log(f"Partition column: {partition_column} FOUND!! Write to partitioned files")
 
         else:
-            logger.info("NO partition column specified! Writing unique files")
+            log("NO partition column specified! Writing unique files")
 
-        logger.info("New columns without accents: %s", new_columns_dict)
+        log(f"New columns without accents: {new_columns_dict}")
 
     dataframe = clean_dataframe(dataframe)
 
