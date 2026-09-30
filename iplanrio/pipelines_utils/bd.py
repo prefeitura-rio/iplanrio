@@ -10,8 +10,10 @@ from google.cloud.storage.blob import Blob
 from prefect import task
 
 from iplanrio.pipelines_utils.env import get_bd_credentials_from_env
-from iplanrio.pipelines_utils.logging import log
+from iplanrio.pipelines_utils.logging import get_logger
 from iplanrio.pipelines_utils.pandas import dump_header_to_file
+
+logger = get_logger(__name__)
 
 
 @task
@@ -40,9 +42,9 @@ def _delete_prod_dataset(only_staging_dataset: bool, dataset_id: str):
     if only_staging_dataset and ds.exists(mode="prod"):
         try:
             ds.delete(mode="prod")
-            log("Successfully deleted prod dataset")
+            logger.info("Successfully deleted prod dataset")
         except Exception as e:
-            log(f"Error while deleting prod dataset: {e}")
+            logger.info(f"Error while deleting prod dataset: {e}")
 
 
 def create_table_and_upload_to_gcs(
@@ -58,45 +60,45 @@ def create_table_and_upload_to_gcs(
     Create table using BD+ and upload to GCS.
     """
     bd_version = bd.__version__
-    log(f"USING BASEDOSDADOS {bd_version}")
+    logger.info(f"USING BASEDOSDADOS {bd_version}")
     tb = bd.Table(dataset_id=dataset_id, table_id=table_id)
-    log(f"Dataset:{dataset_id} Table:{table_id} ")
+    logger.info(f"Dataset:{dataset_id} Table:{table_id} ")
     table_staging = f"{tb.table_full_name['staging']}"
-    log(f"table_staging: {table_staging}")
+    logger.info(f"table_staging: {table_staging}")
 
     st = bd.Storage(dataset_id=dataset_id, table_id=table_id)
     storage_path = f"{st.bucket_name}.staging.{dataset_id}.{table_id}"
-    log(f"storage_path: {storage_path}")
+    logger.info(f"storage_path: {storage_path}")
     storage_path_link = (
         f"https://console.cloud.google.com/storage/browser/{st.bucket_name}"
         f"/staging/{dataset_id}/{table_id}"
     )
-    log(f"storage_path_link: {storage_path_link}")
+    logger.info(f"storage_path_link: {storage_path_link}")
 
     # prod datasets is public if the project is datario. staging are private im both projects
     dataset_is_public = tb.client["bigquery_prod"].project == "datario"
-    log(f"dataset_is_public: {dataset_is_public}")
+    logger.info(f"dataset_is_public: {dataset_is_public}")
 
     #####################################
     #
     # MANAGEMENT OF TABLE CREATION
     #
     #####################################
-    log("STARTING TABLE CREATION MANAGEMENT")
+    logger.info("STARTING TABLE CREATION MANAGEMENT")
     if dump_mode == "append":
         if tb.table_exists(mode="staging"):
-            log(
+            logger.info(
                 f"MODE APPEND: Table ALREADY EXISTS:"
                 f"\n{table_staging}"
                 f"\n{storage_path_link}"
             )
         else:
             # the header is needed to create a table when doesn't exist
-            log("MODE APPEND: Table DOESN'T EXISTS\nStart to CREATE HEADER file")
+            logger.info("MODE APPEND: Table DOESN'T EXISTS\nStart to CREATE HEADER file")
             header_path = dump_header_to_file(
                 data_path=data_path, data_type=source_format
             )
-            log("MODE APPEND: Created HEADER file:\n" f"{header_path}")
+            logger.info("MODE APPEND: Created HEADER file:\n" f"{header_path}")
 
             tb.create(
                 path=header_path,
@@ -108,7 +110,7 @@ def create_table_and_upload_to_gcs(
                 set_biglake_connection_permissions=False,
             )
 
-            log(
+            logger.info(
                 "MODE APPEND: Sucessfully CREATED A NEW TABLE:\n"
                 f"{table_staging}\n"
                 f"{storage_path_link}"
@@ -117,14 +119,14 @@ def create_table_and_upload_to_gcs(
             st.delete_table(
                 mode="staging", bucket_name=st.bucket_name, not_found_ok=True
             )
-            log(
+            logger.info(
                 "MODE APPEND: Sucessfully REMOVED HEADER DATA from Storage:\n"
                 f"{storage_path}\n"
                 f"{storage_path_link}"
             )
     elif dump_mode == "overwrite":
         if tb.table_exists(mode="staging"):
-            log(
+            logger.info(
                 "MODE OVERWRITE: Table ALREADY EXISTS, DELETING OLD DATA!\n"
                 f"{storage_path}\n"
                 f"{storage_path_link}"
@@ -132,13 +134,13 @@ def create_table_and_upload_to_gcs(
             st.delete_table(
                 mode="staging", bucket_name=st.bucket_name, not_found_ok=True
             )
-            log(
+            logger.info(
                 "MODE OVERWRITE: Sucessfully DELETED OLD DATA from Storage:\n"
                 f"{storage_path}\n"
                 f"{storage_path_link}"
             )
             tb.delete(mode="staging")
-            log(
+            logger.info(
                 "MODE OVERWRITE: Sucessfully DELETED TABLE:\n"
                 f"{table_staging}\n"
                 # f"{tb.table_full_name['prod']}"
@@ -146,9 +148,9 @@ def create_table_and_upload_to_gcs(
 
         # the header is needed to create a table when doesn't exist
         # in overwrite mode the header is always created
-        log("MODE OVERWRITE: Table DOESN'T EXISTS\nStart to CREATE HEADER file")
+        logger.info("MODE OVERWRITE: Table DOESN'T EXISTS\nStart to CREATE HEADER file")
         header_path = dump_header_to_file(data_path=data_path, data_type=source_format)
-        log("MODE OVERWRITE: Created HEADER file:\n" f"{header_path}")
+        logger.info("MODE OVERWRITE: Created HEADER file:\n" f"{header_path}")
 
         tb.create(
             path=header_path,
@@ -160,14 +162,14 @@ def create_table_and_upload_to_gcs(
             set_biglake_connection_permissions=False,
         )
 
-        log(
+        logger.info(
             "MODE OVERWRITE: Sucessfully CREATED TABLE\n"
             f"{table_staging}\n"
             f"{storage_path_link}"
         )
 
         st.delete_table(mode="staging", bucket_name=st.bucket_name, not_found_ok=True)
-        log(
+        logger.info(
             f"MODE OVERWRITE: Sucessfully REMOVED HEADER DATA from Storage\n:"
             f"{storage_path}\n"
             f"{storage_path_link}"
@@ -183,18 +185,18 @@ def create_table_and_upload_to_gcs(
     #
     #####################################
 
-    log("STARTING UPLOAD TO GCS")
+    logger.info("STARTING UPLOAD TO GCS")
     if tb.table_exists(mode="staging"):
         # the name of the files need to be the same or the data doesn't get overwritten
         tb.append(filepath=data_path, if_exists="replace")
 
-        log(
+        logger.info(
             f"STEP UPLOAD: Successfully uploaded {data_path} to Storage:\n"
             f"{storage_path}\n"
             f"{storage_path_link}"
         )
     else:
-        log("STEP UPLOAD: Table does not exist in STAGING, need to create first")
+        logger.info("STEP UPLOAD: Table does not exist in STAGING, need to create first")
 
     return data_path
 

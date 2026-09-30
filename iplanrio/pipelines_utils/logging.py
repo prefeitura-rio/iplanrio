@@ -124,9 +124,31 @@ def get_logger(name: Optional[str] = None) -> Logger:
     return logger
 
 
+_DEPRECATION_WARNED_FILES: set[str] = set()
+
+
+def _warn_log_deprecated() -> None:
+    """Avisa, uma vez por arquivo chamador, que ``log()`` está deprecated."""
+    caller = sys._getframe(2)
+    filename = caller.f_code.co_filename
+    if filename in _DEPRECATION_WARNED_FILES:
+        return
+    _DEPRECATION_WARNED_FILES.add(filename)
+    prefect.get_run_logger().warning(
+        "DEPRECATED: `log()` de iplanrio.pipelines_utils.logging será removido. "
+        "Migre para `logger = get_logger(__name__)` e use `logger.info(...)`. "
+        "Chamado em %s:%d",
+        filename,
+        caller.f_lineno,
+    )
+
+
 def log(msg: Any, level: str = "info") -> None:
     """
     Logs a message to prefect's logger.
+
+    .. deprecated::
+        Use ``logger = get_logger(__name__)`` e ``logger.info(...)``.
     """
     levels = {
         "debug": logging.DEBUG,
@@ -142,13 +164,32 @@ def log(msg: Any, level: str = "info") -> None:
 
     if level not in levels:
         raise ValueError(f"Invalid log level: {level}")
+    _warn_log_deprecated()
     logger = prefect.get_run_logger()
     logger.log(level=levels[level], msg=msg)
 
 
-def log_mod(msg: Any, level: str = "info", index: int = 0, mod: int = 1):
+def log_mod(
+    msg: Any,
+    *,
+    logger: Logger,
+    level: str = "info",
+    index: int = 0,
+    mod: int = 1,
+) -> None:
     """
-    Only logs a message if the index is a multiple of mod.
+    Só loga a mensagem se ``index`` for múltiplo de ``mod`` (ou for 0).
+
+    :param msg: Mensagem a logar.
+    :param logger: Logger do módulo chamador, obtido com :func:`get_logger`.
+    :param level: Nível do log (``debug``, ``info``, ``warning``, ``error``, ``critical``).
+    :param index: Índice da iteração atual.
+    :param mod: Loga a cada ``mod`` iterações.
     """
     if index % mod == 0 or index == 0:
-        log(msg=f"iteration {index}:\n {msg}", level=level)
+        logger.log(
+            logging.getLevelNamesMapping()[level.upper()],
+            "iteration %d:\n %s",
+            index,
+            msg,
+        )

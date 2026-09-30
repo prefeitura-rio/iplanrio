@@ -10,7 +10,9 @@ from uuid import uuid4
 import numpy as np
 import pandas as pd
 
-from iplanrio.pipelines_utils.logging import log
+from iplanrio.pipelines_utils.logging import get_logger
+
+logger = get_logger(__name__)
 
 
 def batch_to_dataframe(batch: List[List], columns: List[str]) -> pd.DataFrame:
@@ -80,7 +82,7 @@ def dump_header_to_file(data_path: Union[str, Path], data_type: str = "csv"):
         for fname in filenames:
             if fname.endswith(f".{data_type}"):
                 file = join(subdir, fname)
-                log(f"Found {data_type.upper()} file: {file}")
+                logger.info(f"Found {data_type.upper()} file: {file}")
                 found = True
                 break
         if found:
@@ -93,11 +95,11 @@ def dump_header_to_file(data_path: Union[str, Path], data_type: str = "csv"):
         save_header_file_path = Path(
             f"{save_header_path}/{partition_path}/header.{data_type}"
         )
-        log(f"Found partition path: {save_header_file_path}")
+        logger.info(f"Found partition path: {save_header_file_path}")
 
     else:
         save_header_file_path = Path(f"{save_header_path}/header.{data_type}")
-        log(f"Do not found partition path: {save_header_file_path}")
+        logger.info(f"Do not found partition path: {save_header_file_path}")
 
     # Create directory if it doesn't exist
     save_header_file_path.parent.mkdir(parents=True, exist_ok=True)
@@ -110,7 +112,7 @@ def dump_header_to_file(data_path: Union[str, Path], data_type: str = "csv"):
         dataframe = pd.read_parquet(file)[:1]
         dataframe_to_parquet(dataframe=dataframe, path=save_header_file_path)
 
-    log(f"Wrote {data_type.upper()} header at {save_header_file_path}")
+    logger.info(f"Wrote {data_type.upper()} header at {save_header_file_path}")
 
     return save_header_path
 
@@ -275,14 +277,14 @@ def handle_dataframe_chunk(
     new_columns_dict = dict(zip(old_columns, dataframe.columns.tolist()))
     if idx == 0:
         if partition_column:
-            log(
+            logger.info(
                 f"Partition column: {partition_column} FOUND!! Write to partitioned files"
             )
 
         else:
-            log("NO partition column specified! Writing unique files")
+            logger.info("NO partition column specified! Writing unique files")
 
-        log(f"New columns without accents: {new_columns_dict}")
+        logger.info(f"New columns without accents: {new_columns_dict}")
 
     dataframe = clean_dataframe(dataframe)
 
