@@ -7,8 +7,9 @@ from typing import List, Optional, Union
 from google.oauth2 import service_account
 from prefect import task
 
-from iplanrio.pipelines_utils.logging import log
+from iplanrio.pipelines_utils.logging import get_logger
 
+logger = get_logger(__name__)
 
 def getenv_or_action(
     key: str, default: Optional[str] = None, action: str = "raise"
@@ -34,7 +35,7 @@ def getenv_or_action(
         if action == "raise":
             raise ValueError(f"Environment variable '{key}' not found.")
         elif action == "warn":
-            log(f"Environment variable '{key}' not found.")
+            logger.warning("Environment variable '%s' not found.", key)
     return value
 
 
@@ -96,7 +97,7 @@ def inject_bd_credentials(environment: str = "prod"):
     with open("/tmp/credentials.json", "wb") as credentials_file:
         credentials_file.write(service_account)
     environ["GOOGLE_APPLICATION_CREDENTIALS"] = "/tmp/credentials.json"
-    log(f"INJECTED: {service_account_name}")
+    logger.info("INJECTED: %s", service_account_name)
 
 
 @task

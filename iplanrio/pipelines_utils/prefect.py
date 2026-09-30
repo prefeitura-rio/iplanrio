@@ -14,7 +14,9 @@ from prefect.schedules import Interval
 
 from iplanrio.pipelines_utils.constants import NOT_SET
 from iplanrio.pipelines_utils.io import query_to_line
-from iplanrio.pipelines_utils.logging import log
+from iplanrio.pipelines_utils.logging import get_logger
+
+logger = get_logger(__name__)
 
 
 @task
@@ -26,7 +28,7 @@ def rename_current_flow_run_task(new_name: str):
     # Pega o contexto da execução atual para obter o ID
     context = get_run_context()
     flow_run_id = context.task_run.flow_run_id
-    log(f"Obtido o ID da execução do fluxo: {flow_run_id}")
+    logger.info(f"Obtido o ID da execução do fluxo: {flow_run_id}")
 
     # Usa o cliente assíncrono do Prefect para interagir com a API
     # 1. Define uma função async interna para fazer o trabalho com o cliente
@@ -36,7 +38,7 @@ def rename_current_flow_run_task(new_name: str):
 
     asyncio.run(_update_run_name())
 
-    log(f"Nome da execução do fluxo atualizado para {new_name}!")
+    logger.info(f"Nome da execução do fluxo atualizado para {new_name}!")
 
 
 def generate_dump_db_schedules(
