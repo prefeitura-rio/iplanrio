@@ -38,8 +38,11 @@ automaticamente a partir do caminho do arquivo chamador
 (``.../pipelines/rj_sec__pipe/flow.py`` -> ``pipelines.rj_sec__pipe.flow``).
 """
 
+import json
 import logging
+import os
 import sys
+from datetime import datetime, timezone
 from logging import Logger
 from pathlib import Path
 from typing import Any, Optional
@@ -49,6 +52,7 @@ import prefect
 LEVEL_ENV_VAR = "PREFECT_LOGGING_LEVEL"
 DEFAULT_LEVEL = logging.DEBUG
 PIPELINES_DIR = "pipelines"
+ENVIRONMENT_ENV_VAR = "PREFECT_LOGGING_ENVIRONMENT"
 
 _FALLBACK_FORMAT = "%(asctime)s | %(levelname)-8s | %(name)s - %(message)s"
 _FALLBACK_DATE_FORMAT = "%Y-%m-%d %H:%M:%S"
@@ -93,6 +97,146 @@ def _resolve_name(name: Optional[str], caller_globals: dict[str, Any]) -> str:
     return derived or name or caller_globals.get("__name__", "root")
 
 
+# Atributos que todo LogRecord tem; o resto é "campo extra" (``extra={...}``).
+_STANDARD_RECORD_ATTRS = frozenset(logging.makeLogRecord({}).__dict__) | {
+    "message",
+    "asctime",
+    "taskName",
+}
+
+
+def _pipeline_from_logger_name(name: str) -> Optional[str]:
+    """``pipelines.rj_sec__pipe.tasks`` -> ``rj_sec__pipe``."""
+    parts = name.split(".")
+    if parts[0] == PIPELINES_DIR and len(parts) > 1:
+        return parts[1]
+    return None
+
+
+class RunContextFilter(logging.Filter):
+    """Anexa ao record o ambiente, o pipeline e os dados do flow/task run.
+
+    Do run: nomes, IDs, tentativa (``*_run_count``), ``deployment_id``,
+    ``deployment_version`` (tag da imagem) e ``work_pool_name``. Valores ausentes
+    (ex.: run sem deployment) não são anexados.
+
+    O ambiente (``staging``/``prod``) vem de ``PREFECT_LOGGING_ENVIRONMENT``, definida
+    no Infisical; sem a variável, o campo ``environment`` não é anexado.
+
+    Funciona fora de contexto (não anexa nada do run e nunca levanta erro). Campos
+    já presentes no record — como os dos loggers de run do Prefect — são mantidos.
+    """
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        from prefect.context import FlowRunContext, TaskRunContext
+
+        fields: dict[str, Any] = {}
+        if environment := os.environ.get(ENVIRONMENT_ENV_VAR):
+            fields["environment"] = environment
+        if pipeline := _pipeline_from_logger_name(record.name):
+            fields["pipeline"] = pipeline
+        if (flow_ctx := FlowRunContext.get()) and flow_ctx.flow_run:
+            flow_run = flow_ctx.flow_run
+            fields["flow_name"] = flow_ctx.flow.name if flow_ctx.flow else None
+            fields["flow_run_id"] = str(flow_run.id)
+            fields["flow_run_name"] = flow_run.name
+            fields["flow_run_count"] = flow_run.run_count
+            fields["deployment_id"] = str(flow_run.deployment_id or "") or None
+            fields["deployment_version"] = flow_run.deployment_version
+            fields["work_pool_name"] = flow_run.work_pool_name
+        if (task_ctx := TaskRunContext.get()) and task_ctx.task_run:
+            fields["task_name"] = task_ctx.task.name if task_ctx.task else None
+            fields["task_run_id"] = str(task_ctx.task_run.id)
+            fields["task_run_name"] = task_ctx.task_run.name
+            fields["task_run_count"] = task_ctx.task_run.run_count
+        for key, value in fields.items():
+            if value is not None:
+                record.__dict__.setdefault(key, value)
+        return True
+
+
+# Início dos flow runs (segundos), para calcular a duração no log final.
+_FLOW_RUN_START: dict[str, float] = {}
+
+_TASK_LOGGER = "prefect.task_runs"
+_FLOW_LOGGER = "prefect.flow_runs"
+
+
+def _finish_fields(record: logging.LogRecord) -> dict[str, Any]:
+    """Campos do log de término de um task/flow run (a mensagem do próprio Prefect).
+
+    Transforma ``Finished in state Completed()`` em um evento resumo: ``event``
+    (``task_finished``/``flow_finished``), ``state``, ``outcome`` e, para flows,
+    ``duration_ms``.
+    """
+    if record.name not in (_TASK_LOGGER, _FLOW_LOGGER):
+        return {}
+    message = record.getMessage()
+    is_task = record.name == _TASK_LOGGER
+    run_id = str(getattr(record, "task_run_id" if is_task else "flow_run_id", ""))
+
+    if not is_task and message.startswith("Beginning flow run"):
+        _FLOW_RUN_START[run_id] = record.created
+        return {}
+    if not message.startswith("Finished in state"):
+        return {}
+
+    fields: dict[str, Any] = {
+        "event": "task_finished" if is_task else "flow_finished",
+        "state": message.removeprefix("Finished in state ").split("(")[0].strip(),
+        "outcome": "success" if record.levelno < logging.ERROR else "error",
+    }
+    if (start := _FLOW_RUN_START.pop(run_id, None)) is not None and not is_task:
+        fields["duration_ms"] = round((record.created - start) * 1000)
+    return fields
+
+
+class StructuredFormatter(logging.Formatter):
+    """Formata o record como uma linha JSON com esquema fixo.
+
+    Campos: ``timestamp`` (UTC, ISO 8601), ``severity_text``, ``body``, ``logger``,
+    os campos de contexto anexados por :class:`RunContextFilter`, os campos extras
+    e, se houver exceção, ``exc`` com ``type``, ``message`` e ``traceback``.
+
+    O log de término de cada task/flow run do Prefect (``Finished in state ...``)
+    vira um evento resumo automático: ``event``, ``state``, ``outcome`` e, nos
+    flows, ``duration_ms``.
+
+    Uso (Infisical)::
+
+        PREFECT_LOGGING_FORMATTERS_JSON_CLASS=iplanrio.pipelines_utils.logging.StructuredFormatter
+        PREFECT_LOGGING_HANDLERS_CONSOLE_FORMATTER=json
+
+    Afeta só o console (stdout do pod); a UI do Prefect continua recebendo a mensagem.
+    """
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        super().__init__()
+
+    def format(self, record: logging.LogRecord) -> str:
+        payload: dict[str, Any] = {
+            "timestamp": datetime.fromtimestamp(record.created, tz=timezone.utc).isoformat(
+                timespec="milliseconds"
+            ),
+            "severity_text": record.levelname,
+            "body": record.getMessage(),
+            "logger": record.name,
+        }
+        for key, value in record.__dict__.items():
+            if key not in _STANDARD_RECORD_ATTRS and key not in payload:
+                payload[key] = value
+        for key, value in _finish_fields(record).items():
+            payload.setdefault(key, value)
+        if record.exc_info and record.exc_info[0] is not None:
+            exc_type, exc, _ = record.exc_info
+            payload["exc"] = {
+                "type": exc_type.__name__,
+                "message": str(exc),
+                "traceback": self.formatException(record.exc_info),
+            }
+        return json.dumps(payload, default=str, ensure_ascii=False)
+
+
 def get_logger(name: Optional[str] = None) -> Logger:
     """Retorna o logger do módulo chamador.
 
@@ -113,6 +257,9 @@ def get_logger(name: Optional[str] = None) -> Logger:
     """
     logger = logging.getLogger(_resolve_name(name, sys._getframe(1).f_globals))
     logger.setLevel(_level_from_env())
+
+    if not any(isinstance(f, RunContextFilter) for f in logger.filters):
+        logger.addFilter(RunContextFilter())
 
     if not logger.hasHandlers():
         handler = logging.StreamHandler()
