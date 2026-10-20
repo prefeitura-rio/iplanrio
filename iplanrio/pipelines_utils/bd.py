@@ -5,7 +5,6 @@ from pathlib import Path
 from typing import Dict, List, Optional, Union
 
 import basedosdados as bd
-import tomlkit
 from basedosdados import Base
 from google.cloud import storage
 from google.cloud.storage.blob import Blob
@@ -74,7 +73,7 @@ def create_table_and_upload_to_gcs(
             Useful when the bucket lives in a different project from the table.
             Defaults to ``project_id`` when it is provided, otherwise to the bucket
             of the current basedosdados config. If provided without ``project_id``,
-            only the bucket is overridden and the configured project is kept.
+            only the bucket is overridden and the configured projects are kept.
     """
     bd_version = bd.__version__
     log(f"USING BASEDOSDADOS {bd_version}")
@@ -88,10 +87,13 @@ def create_table_and_upload_to_gcs(
         )
         os.environ["BASEDOSDADOS_CONFIG"] = encoded_config
     elif bucket_name is not None:
-        log(f"Overriding bucket to: {bucket_name} (keeping the configured project)")
-        os.environ["BASEDOSDADOS_CONFIG"] = get_base64_bd_config_with_bucket(
-            bucket_name
+        log(f"Overriding bucket to: {bucket_name} (keeping the configured projects)")
+        encoded_config = get_base64_bd_config(
+            project_id=get_project_id(mode="prod"),
+            project_id_staging=get_project_id(mode="staging"),
+            bucket_name=bucket_name,
         )
+        os.environ["BASEDOSDADOS_CONFIG"] = encoded_config
 
     tb = bd.Table(dataset_id=dataset_id, table_id=table_id)
     log(f"Dataset:{dataset_id} Table:{table_id} ")
@@ -304,14 +306,20 @@ def secret_to_base64(secret_dict: Dict) -> str:
     return base64_string
 
 
-def get_base64_bd_config(project_id: str, bucket_name: Optional[str] = None) -> str:
+def get_base64_bd_config(
+    project_id: str,
+    bucket_name: Optional[str] = None,
+    project_id_staging: Optional[str] = None,
+) -> str:
     """
     Generates a Base64-encoded configuration string for a project ID,
     formatted for use with a data bucket and Google Cloud configurations.
 
     Args:
-    project_id (str): The project ID used in the configuration.
+    project_id (str): The project ID used in the configuration (prod, and staging
+        unless project_id_staging is given).
     bucket_name (str, optional): Bucket for the staging data. Defaults to project_id.
+    project_id_staging (str, optional): Project ID for staging. Defaults to project_id.
 
     Returns:
     str: A Base64-encoded configuration string.
@@ -325,7 +333,7 @@ def get_base64_bd_config(project_id: str, bucket_name: Optional[str] = None) -> 
 
                 [gcloud-projects.staging]
                     credentials_path = "~/.basedosdados/credentials/staging.json"
-                    name = "{project_id}"
+                    name = "{project_id_staging or project_id}"
 
                 [gcloud-projects.prod]
                     credentials_path = "~/.basedosdados/credentials/prod.json"
@@ -340,23 +348,6 @@ def get_base64_bd_config(project_id: str, bucket_name: Optional[str] = None) -> 
     encoded_string = base64.b64encode(string_bytes).decode("utf-8")
 
     return encoded_string
-
-
-def get_base64_bd_config_with_bucket(bucket_name: str) -> str:
-    """
-    Takes the current basedosdados config (BASEDOSDADOS_CONFIG env var or
-    ~/.basedosdados/config.toml), overrides only its bucket_name and returns
-    it Base64-encoded.
-
-    Args:
-    bucket_name (str): The bucket to use instead of the configured one.
-
-    Returns:
-    str: A Base64-encoded configuration string.
-    """
-    config = Base().config
-    config["bucket_name"] = bucket_name
-    return base64.b64encode(tomlkit.dumps(config).encode("utf-8")).decode("utf-8")
 
 
 def base64_to_string(base64_string: str) -> str:
