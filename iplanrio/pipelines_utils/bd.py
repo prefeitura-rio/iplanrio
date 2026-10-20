@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
 import base64
+import os
 from pathlib import Path
-from typing import Dict, List, Union
+from typing import Dict, List, Optional, Union
 
 import basedosdados as bd
 from basedosdados import Base
@@ -23,6 +24,8 @@ def create_table_and_upload_to_gcs_task(
     biglake_table: bool = True,
     source_format: str = "csv",
     only_staging_dataset: bool = False,
+    project_id: Optional[str] = None,
+    bucket_name: Optional[str] = None,
 ) -> Union[str, Path]:
     return create_table_and_upload_to_gcs(
         data_path=data_path,
@@ -32,6 +35,8 @@ def create_table_and_upload_to_gcs_task(
         biglake_table=biglake_table,
         source_format=source_format,
         only_staging_dataset=only_staging_dataset,
+        project_id=project_id,
+        bucket_name=bucket_name,
     )
 
 
@@ -53,12 +58,31 @@ def create_table_and_upload_to_gcs(
     biglake_table: bool = True,
     source_format: str = "csv",
     only_staging_dataset: bool = False,
+    project_id: Optional[str] = None,
+    bucket_name: Optional[str] = None,
 ) -> Union[str, Path]:
     """
     Create table using BD+ and upload to GCS.
+
+    Args:
+        project_id (str, optional): If provided, overrides the GCP project used for
+            both BigQuery and GCS. Useful for uploading data to a project different
+            from the one configured in ~/.basedosdados/config.toml or
+            BASEDOSDADOS_CONFIG env var.
+        bucket_name (str, optional): GCS bucket where the staging data is stored.
+            Useful when the bucket lives in a different project from the table.
+            Defaults to ``project_id``. Only used when ``project_id`` is provided.
     """
     bd_version = bd.__version__
     log(f"USING BASEDOSDADOS {bd_version}")
+
+    if project_id is not None:
+        log(f"Overriding project to: {project_id}")
+        encoded_config = get_base64_bd_config(
+            project_id=project_id, bucket_name=bucket_name
+        )
+        os.environ["BASEDOSDADOS_CONFIG"] = encoded_config
+
     tb = bd.Table(dataset_id=dataset_id, table_id=table_id)
     log(f"Dataset:{dataset_id} Table:{table_id} ")
     table_staging = f"{tb.table_full_name['staging']}"
@@ -270,13 +294,14 @@ def secret_to_base64(secret_dict: Dict) -> str:
     return base64_string
 
 
-def get_base64_bd_config(projec_id: str) -> str:
+def get_base64_bd_config(project_id: str, bucket_name: Optional[str] = None) -> str:
     """
     Generates a Base64-encoded configuration string for a project ID,
     formatted for use with a data bucket and Google Cloud configurations.
 
     Args:
-    projec_id (str): The project ID used in the configuration.
+    project_id (str): The project ID used in the configuration.
+    bucket_name (str, optional): Bucket for the staging data. Defaults to project_id.
 
     Returns:
     str: A Base64-encoded configuration string.
@@ -284,23 +309,21 @@ def get_base64_bd_config(projec_id: str) -> str:
 
     string = f"""# What is the bucket that you are saving all the data? It should be
                 # an unique name.
-                bucket_name = "{projec_id}"
+                bucket_name = "{bucket_name or project_id}"
 
                 [gcloud-projects]
 
                 [gcloud-projects.staging]
                     credentials_path = "~/.basedosdados/credentials/staging.json"
-                    name = "{projec_id}"
+                    name = "{project_id}"
 
                 [gcloud-projects.prod]
                     credentials_path = "~/.basedosdados/credentials/prod.json"
-                    name = "{projec_id}"
+                    name = "{project_id}"
 
                 [api]
                 url = "https://api.dados.rio/api/v1/graphql"
-            """.replace(
-        "                ", ""
-    )
+            """.replace("                ", "")
 
     string_bytes = string.encode("utf-8")
 
