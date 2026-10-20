@@ -71,15 +71,27 @@ def create_table_and_upload_to_gcs(
             BASEDOSDADOS_CONFIG env var.
         bucket_name (str, optional): GCS bucket where the staging data is stored.
             Useful when the bucket lives in a different project from the table.
-            Defaults to ``project_id``. Only used when ``project_id`` is provided.
+            Defaults to ``project_id`` when it is provided, otherwise to the bucket
+            of the current basedosdados config. If provided without ``project_id``,
+            only the bucket is overridden and the configured projects are kept.
     """
     bd_version = bd.__version__
     log(f"USING BASEDOSDADOS {bd_version}")
 
     if project_id is not None:
         log(f"Overriding project to: {project_id}")
+        if bucket_name is not None:
+            log(f"Overriding bucket to: {bucket_name}")
         encoded_config = get_base64_bd_config(
             project_id=project_id, bucket_name=bucket_name
+        )
+        os.environ["BASEDOSDADOS_CONFIG"] = encoded_config
+    elif bucket_name is not None:
+        log(f"Overriding bucket to: {bucket_name} (keeping the configured projects)")
+        encoded_config = get_base64_bd_config(
+            project_id=get_project_id(mode="prod"),
+            project_id_staging=get_project_id(mode="staging"),
+            bucket_name=bucket_name,
         )
         os.environ["BASEDOSDADOS_CONFIG"] = encoded_config
 
@@ -294,14 +306,20 @@ def secret_to_base64(secret_dict: Dict) -> str:
     return base64_string
 
 
-def get_base64_bd_config(project_id: str, bucket_name: Optional[str] = None) -> str:
+def get_base64_bd_config(
+    project_id: str,
+    bucket_name: Optional[str] = None,
+    project_id_staging: Optional[str] = None,
+) -> str:
     """
     Generates a Base64-encoded configuration string for a project ID,
     formatted for use with a data bucket and Google Cloud configurations.
 
     Args:
-    project_id (str): The project ID used in the configuration.
+    project_id (str): The project ID used in the configuration (prod, and staging
+        unless project_id_staging is given).
     bucket_name (str, optional): Bucket for the staging data. Defaults to project_id.
+    project_id_staging (str, optional): Project ID for staging. Defaults to project_id.
 
     Returns:
     str: A Base64-encoded configuration string.
@@ -315,7 +333,7 @@ def get_base64_bd_config(project_id: str, bucket_name: Optional[str] = None) -> 
 
                 [gcloud-projects.staging]
                     credentials_path = "~/.basedosdados/credentials/staging.json"
-                    name = "{project_id}"
+                    name = "{project_id_staging or project_id}"
 
                 [gcloud-projects.prod]
                     credentials_path = "~/.basedosdados/credentials/prod.json"
