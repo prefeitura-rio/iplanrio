@@ -24,7 +24,7 @@ def download_repository(git_repository_path: str) -> str:
             shutil.rmtree(repository_path, ignore_errors=False)
         os.makedirs(repository_path)
 
-        log(f"Repository folder created: {repository_path}", level="info")
+        # logger.info(f"Repository folder created: {repository_path}")
 
     except Exception as e:
         raise Exception(f"Error when creating repository folder: {e}")
@@ -32,7 +32,7 @@ def download_repository(git_repository_path: str) -> str:
     # Download repository
     try:
         git.Repo.clone_from(git_repository_path, repository_path)
-        log(f"Repository downloaded: {git_repository_path}", level="info")
+        # logger.info(f"Repository downloaded: {git_repository_path}")
     except git.GitCommandError as e:
         raise Exception(f"Error when downloading repository: {e}")
 
